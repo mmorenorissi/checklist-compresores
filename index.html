@@ -601,16 +601,78 @@ const REFERENCIA_MTTO = {
   }
 };
 
-function getReferenciaEquipo(equipo){
+function getFamiliaEquipo(equipo){
   if(!equipo) return null;
-  if(equipo.categoria === 'portatil') return REFERENCIA_MTTO.portatil;
+  if(equipo.categoria === 'portatil') return 'portatil';
   for(const key of ['kaeser_estatico', 'atlascopco_ga', 'ingersoll_mm75']){
-    if(REFERENCIA_MTTO[key].modelos.includes(equipo.modelo)) return REFERENCIA_MTTO[key];
+    if(REFERENCIA_MTTO[key].modelos.includes(equipo.modelo)) return key;
   }
   return null;
 }
+function getReferenciaEquipo(equipo){
+  const key = getFamiliaEquipo(equipo);
+  return key ? REFERENCIA_MTTO[key] : null;
+}
+
+// ============================================================
+// CATÁLOGO DE REPUESTOS POR FAMILIA — números de parte reales donde están
+// confirmados (manuales KAESER CSD-105/ASD-40, checklist original Atlas Copco
+// portátil). Donde no hay dato confirmado se deja el N° de Parte en blanco
+// para completar a mano — no se inventan números.
+// ============================================================
+const REPUESTOS_CATALOGO = {
+  kaeser_estatico: [
+    { descripcion: 'Cartucho filtrante de aire', numeroParte: '1250' },
+    { descripcion: 'Esterilla filtrante armario eléctrico', numeroParte: '1100' },
+    { descripcion: 'Esterilla filtrante (opción K3)', numeroParte: '1050' },
+    { descripcion: 'Filtro de aceite', numeroParte: '1200' },
+    { descripcion: 'Cartucho separador de aceite', numeroParte: '1450' },
+    { descripcion: 'Aceite refrigerante S-460', numeroParte: '1600' },
+    { descripcion: 'Grasa para cojinetes (100 g)', numeroParte: '9.0915.0' },
+    { descripcion: 'Grasa para cojinetes (400 g)', numeroParte: '6.3234.0' },
+  ],
+  atlascopco_ga: [
+    { descripcion: 'Filtro de aire', numeroParte: '' },
+    { descripcion: 'Filtro de aceite', numeroParte: '' },
+    { descripcion: 'Aceite Roto-Inject', numeroParte: '' },
+    { descripcion: 'Kit válvulas admisión/presión mínima', numeroParte: '' },
+    { descripcion: 'Filtro separador aire/aceite', numeroParte: '' },
+    { descripcion: 'Kit termostato/acoplamiento', numeroParte: '' },
+    { descripcion: 'Mangueras hidráulicas / solenoides', numeroParte: '' },
+  ],
+  ingersoll_mm75: [
+    { descripcion: 'Filtro de aire', numeroParte: '' },
+    { descripcion: 'Filtro de coolant / lubricante', numeroParte: '' },
+  ],
+  portatil: [
+    { descripcion: 'Aceite de motor', numeroParte: '' },
+    { descripcion: 'Filtro de aceite de motor', numeroParte: '' },
+    { descripcion: 'Filtro de combustible', numeroParte: '' },
+    { descripcion: 'Filtro de aire compresor', numeroParte: '' },
+    { descripcion: 'Aceite de compresor', numeroParte: '' },
+    { descripcion: 'Filtro de aceite de la unidad (15 BAR)', numeroParte: '1613610500' },
+    { descripcion: 'Filtro separador aire-aceite (20 BAR)', numeroParte: '1626832100' },
+  ],
+};
+function getCatalogoRepuestos(equipo){
+  const key = getFamiliaEquipo(equipo);
+  return key ? (REPUESTOS_CATALOGO[key] || []) : [];
+}
 
 const INTERVALOS = ['250 h','500 h','1.000 h','2.000 h','3.000 h','4.000 h','6.000 h','8.000 h','12.000 h','16.000 h','Anual','Otro'];
+
+function formatHorasLabel(n){
+  return n.toLocaleString('es-CL') + ' h';
+}
+// Devuelve solo los intervalos que realmente aplican al equipo elegido, sacados
+// directamente de su propia tabla de referencia (sin tramos "siempre").
+function intervalosParaEquipo(equipo){
+  const ref = equipo ? getReferenciaEquipo(equipo) : null;
+  if(!ref) return INTERVALOS; // sin referencia mapeada -> lista genérica completa
+  const nums = [...new Set(ref.tramos.filter(t => !t.siempre && t.horasNum).map(t => t.horasNum))].sort((a,b) => a-b);
+  if(!nums.length) return INTERVALOS;
+  return nums.map(formatHorasLabel).concat(['Otro']);
+}
 
 // ============================================================
 // PAUTA DE MANTENCIÓN — armada dinámicamente según equipo + intervalo elegido.
@@ -628,6 +690,8 @@ const MTTO_SEGURIDAD = [
   'Bloqueo/etiquetado (LOTO) aplicado antes de intervenir.',
   'Registro en libro de bloqueo completado.',
   'Registro de segregación del área realizado.',
+  'Estado inicial del equipo registrado (fotografía antes de intervenir).',
+  'Placa de identificación / N° de serie fotografiada.',
 ];
 const MTTO_COMPONENTES_INSPECCION = [
   'Alternador/motor: voltaje de salida y estado físico verificado.',
@@ -642,6 +706,8 @@ const MTTO_PUESTA_MARCHA = [
   'Estabilización de presión monitoreada dentro de parámetros normales.',
   'Ausencia de fugas de aire y aceite verificada tras la presurización.',
   'Todas las protecciones y puertas laterales reinstaladas correctamente.',
+  'Registro de entrega del equipo realizado.',
+  'Imagen general del área de trabajo (segregación retirada y housekeeping).',
 ];
 // Fallback genérico si el equipo aún no tiene familia mapeada en REFERENCIA_MTTO
 const MTTO_GENERICO_FALLBACK = [
@@ -923,9 +989,9 @@ function populateFormAreaSelect(selected){
   sel.innerHTML = `<option value="">Selecciona un área…</option>` + AREAS.map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join('');
   if(selected) sel.value = selected;
 }
-function populateFormIntervalo(){
+function populateFormIntervalo(equipo){
   const sel = document.getElementById('f_intervalo');
-  sel.innerHTML = INTERVALOS.map(i => `<option value="${esc(i)}">${esc(i)}</option>`).join('');
+  sel.innerHTML = intervalosParaEquipo(equipo || null).map(i => `<option value="${esc(i)}">${esc(i)}</option>`).join('');
 }
 document.getElementById('f_ninforme').addEventListener('input', (e) => { delete e.target.dataset.autofolio; });
 
@@ -961,6 +1027,14 @@ function populateFormEquipoSelect(){
 document.getElementById('f_equipo').addEventListener('change', (e) => {
   const equipo = equipos.find(eq => eq.id === e.target.value) || null;
   applyEquipoToForm(equipo);
+  if(currentServicio === 'mtto'){
+    const intervaloSel = document.getElementById('f_intervalo');
+    const previo = intervaloSel.value;
+    populateFormIntervalo(equipo);
+    // conserva la selección previa si sigue siendo una opción válida para el nuevo equipo
+    if([...intervaloSel.options].some(o => o.value === previo)) intervaloSel.value = previo;
+    document.getElementById('f_tiposervicio').value = 'MANTENCIÓN — ' + intervaloSel.value;
+  }
   rebuildMttoPautaIfNeeded();
 });
 function applyEquipoToForm(equipo){
@@ -974,6 +1048,7 @@ function applyEquipoToForm(equipo){
   document.getElementById('f_horometroJust').value = '';
   renderHistorialEquipoMini(equipo);
   renderReferenciaMtto(equipo);
+  renderRepuestosUsados();
 }
 
 // Rearma la pauta de Mantención (secciones + ítems) cuando cambia el equipo o el
@@ -1334,20 +1409,40 @@ function updateSummary(){
 function renderRepuestosUsados(){
   const box = document.getElementById('repuestosUsadosRows');
   box.innerHTML = '';
+  const equipoActual = equipos.find(e => e.id === document.getElementById('f_equipo').value);
+  const catalogo = getCatalogoRepuestos(equipoActual);
   repuestosUsados.forEach((row, i) => {
     const d = document.createElement('div');
     d.className = 'dyn-row';
+    const usaLibre = row.descModo === 'libre' || !catalogo.length;
+    const descHTML = usaLibre
+      ? `<input type="text" placeholder="Descripción" value="${esc(row.descripcion)}" data-f="descripcion">`
+      : `<select data-f="descripcion-select" style="padding:8px 9px;border:1.5px solid var(--line);border-radius:7px;font-size:13px;width:100%;">
+           <option value="">Selecciona repuesto…</option>
+           ${catalogo.map(c => `<option value="${esc(c.descripcion)}" ${row.descripcion===c.descripcion?'selected':''}>${esc(c.descripcion)}</option>`).join('')}
+           <option value="__otro__">Otro (escribir)…</option>
+         </select>`;
     d.innerHTML = `
-      <input type="text" placeholder="Descripción" value="${esc(row.descripcion)}" data-f="descripcion">
+      ${descHTML}
       <input type="text" placeholder="N° parte" value="${esc(row.parte)}" data-f="parte">
       <input type="text" placeholder="Cant." value="${esc(row.cantidad)}" data-f="cantidad">
       <button class="rm-row" type="button">✕</button>`;
+    const descSel = d.querySelector('[data-f="descripcion-select"]');
+    if(descSel){
+      descSel.addEventListener('change', (e) => {
+        if(e.target.value === '__otro__'){ row.descModo = 'libre'; row.descripcion = ''; renderRepuestosUsados(); return; }
+        row.descripcion = e.target.value;
+        const found = catalogo.find(c => c.descripcion === e.target.value);
+        if(found && found.numeroParte) row.parte = found.numeroParte;
+        renderRepuestosUsados();
+      });
+    }
     d.querySelectorAll('input').forEach(inp => inp.addEventListener('input', e => { row[e.target.dataset.f] = e.target.value; }));
     d.querySelector('.rm-row').addEventListener('click', () => { repuestosUsados.splice(i,1); renderRepuestosUsados(); });
     box.appendChild(d);
   });
 }
-document.getElementById('addRepuestoUsado').addEventListener('click', () => { repuestosUsados.push({descripcion:'',parte:'',cantidad:''}); renderRepuestosUsados(); });
+document.getElementById('addRepuestoUsado').addEventListener('click', () => { repuestosUsados.push({descripcion:'',parte:'',cantidad:'',descModo:''}); renderRepuestosUsados(); });
 
 /* ---- repuestos recomendados (dinámico) ---- */
 function renderRepuestosRec(){
@@ -1539,11 +1634,12 @@ async function loadRecordIntoForm(id){
 
   populateFormAreaSelect(rec.area);
   populateFormEquipoSelect();
+  const equipoDelRegistro = rec.equipoId ? equipos.find(e => e.id === rec.equipoId) : null;
   if(rec.equipoId){
     document.getElementById('f_equipo').value = rec.equipoId;
-    renderReferenciaMtto(equipos.find(e => e.id === rec.equipoId));
+    renderReferenciaMtto(equipoDelRegistro);
   }
-  populateFormIntervalo();
+  populateFormIntervalo(equipoDelRegistro);
   if(rec.intervalo) document.getElementById('f_intervalo').value = rec.intervalo;
 
   document.getElementById('f_ninforme').value = rec.ninforme || '';
