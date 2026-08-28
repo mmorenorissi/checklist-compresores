@@ -157,6 +157,18 @@
   .empty-state{padding:44px 20px;text-align:center;color:var(--muted);font-size:13px;}
   .filter-row{display:flex;gap:6px;padding:10px 14px 0;flex-wrap:wrap;}
   .filter-chip{padding:6px 11px;border-radius:20px;border:1.5px solid var(--line);background:#fff;font-size:11.5px;font-weight:600;color:var(--muted);cursor:pointer;}
+  .ref-card{background:#F5F8FB;border:1.5px solid var(--steel);border-radius:10px;margin-bottom:12px;overflow:hidden;}
+  .ref-head{padding:11px 14px;background:var(--steel);color:#fff;display:flex;justify-content:space-between;align-items:center;cursor:pointer;}
+  .ref-head h3{font-family:var(--font-display);font-size:14px;font-weight:700;margin:0;}
+  .ref-head .chev{font-size:12px;transition:transform .2s;}
+  .ref-head .chev.open{transform:rotate(180deg);}
+  .ref-body{padding:12px 14px;}
+  .ref-body.collapsed{display:none;}
+  .ref-nota{font-size:11.5px;color:var(--muted);line-height:1.4;margin-bottom:10px;padding:8px 10px;background:#fff;border-radius:7px;border:1px solid var(--line);}
+  .ref-tramo{display:flex;gap:10px;padding:7px 0;border-top:1px solid var(--line);}
+  .ref-tramo:first-child{border-top:none;}
+  .ref-horas{flex:none;width:38%;font-size:11.5px;font-weight:700;color:var(--steel);font-family:var(--font-mono);}
+  .ref-items{flex:1;font-size:12.5px;line-height:1.4;}
   .filter-chip.active{background:var(--steel);border-color:var(--steel);color:#fff;}
 
   .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:10px 18px;border-radius:30px;font-size:13px;font-weight:600;opacity:0;transition:all .25s;z-index:50;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.25);max-width:88vw;text-align:center;}
@@ -305,6 +317,8 @@
       <div class="pill na"><b id="sumNA">0</b>N/A</div>
       <div class="pill pend"><b id="sumPend">0</b>Pend.</div>
     </div>
+
+    <div id="referenciaMttoCard" style="display:none;"></div>
 
     <div id="sectionsWrap"></div>
 
@@ -532,6 +546,69 @@ const CRITICIDADES = [
 // Maestro de personal — editable desde la pestaña Equipos.
 const TECNICOS_DEFAULT = ['Bairon Vivar', 'Rafael López', 'Luciano Zapata', 'Juan Flores'];
 const SUPERVISORES_DEFAULT = ['Alejandro Ojeda', 'Solange Méndez'];
+
+// ============================================================
+// REFERENCIA DE MANTENCIÓN POR FAMILIA DE EQUIPO
+// Fuente: manuales OEM reales (KAESER CSD-105/ASD-40/CSDX165, Atlas Copco XAS-400)
+// cruzados con documentos IA (ChatGPT/Google/Grok) y ajustados a la práctica real
+// de PHN en terreno (aceite S-460/Roto-Inject, adelanto de horas en portátiles).
+// Es SOLO informativa — no cambia ni filtra los 44 ítems de la pauta.
+// ============================================================
+const REFERENCIA_MTTO = {
+  kaeser_estatico: {
+    label: 'KAESER estático (CSD-105 / CSDX165 / ASD-40)',
+    modelos: ['CSD-105', 'CSDX165', 'ASD-40'],
+    nota: 'Aceite de referencia: SIGMA FLUID S-460. Sala cerrada — sin adelanto de horas por ambiente.',
+    tramos: [
+      { horas: 'Semanal', items: ['Nivel de aceite refrigerante', 'Esterilla filtro armario eléctrico'] },
+      { horas: '1.000 h', items: ['Limpieza de enfriador', 'Esterilla filtro aire refrigerante'] },
+      { horas: '3.000 h', items: ['Elemento filtro de aire (recambio)', 'Esterilla armario (recambio)'] },
+      { horas: '6.000 h (mín. 1x año)', items: ['Filtro de aceite'] },
+      { horas: '6.000 h (máx. 3 años)', items: ['Cartucho separador de aceite'] },
+      { horas: '6.000 h (4.000 h si condición desfavorable)', items: ['Aceite S-460'] },
+      { horas: '6.000–12.000 h según modelo', items: ['Rodamientos de motor'] },
+    ]
+  },
+  atlascopco_ga: {
+    label: 'Atlas Copco GA (GA160 / GA250 / GA75 / GA55 / GA15+)',
+    modelos: ['GA160', 'GA250', 'GA75', 'GA55', 'GA15+'],
+    nota: 'Aceite de referencia: Roto-Inject (mineral). Si el equipo usa Roto-Xtend (sintético), el cambio de aceite se extiende a 8.000h. Confirmar en placa si es versión "+".',
+    tramos: [
+      { horas: '2.000 h', items: ['Filtro de aire', 'Filtro de aceite', 'Muestra de aceite'] },
+      { horas: '4.000 h', items: ['Cambio de aceite completo', 'Kit válvulas admisión/presión mínima'] },
+      { horas: '8.000 h', items: ['Filtro separador aire/aceite', 'Termostato y acoplamiento'] },
+      { horas: '16.000 h', items: ['Mangueras hidráulicas / solenoides'] },
+    ]
+  },
+  ingersoll_mm75: {
+    label: 'Ingersoll Rand MM75',
+    modelos: ['MM75'],
+    nota: 'Confirmar generación exacta del equipo — hay documentación histórica SSR con intervalos distintos.',
+    tramos: [
+      { horas: 'Anual / por indicador', items: ['Filtro de aire'] },
+      { horas: '2.000 h', items: ['Filtro de coolant / lubricante'] },
+    ]
+  },
+  portatil: {
+    label: 'Portátiles (Kaeser M50, Atlas Copco XAS/U-190)',
+    modelos: [], // se activa por categoria === 'portatil'
+    nota: 'Intervalos adelantados a la mitad respecto al fabricante (250/500/1.000h en vez de 500/1.000/2.000h) por exposición a sol y polvo — misma tabla para todos los portátiles.',
+    tramos: [
+      { horas: '250 h', items: ['Aceite de motor', 'Filtro de aceite de motor', 'Filtro de combustible'] },
+      { horas: '500 h', items: ['Filtro de aire compresor', 'Aceite de compresor', 'Calibración de válvulas motor'] },
+      { horas: '1.000 h', items: ['Separador de aceite', 'Kit válvula de carga/presión mínima'] },
+    ]
+  }
+};
+
+function getReferenciaEquipo(equipo){
+  if(!equipo) return null;
+  if(equipo.categoria === 'portatil') return REFERENCIA_MTTO.portatil;
+  for(const key of ['kaeser_estatico', 'atlascopco_ga', 'ingersoll_mm75']){
+    if(REFERENCIA_MTTO[key].modelos.includes(equipo.modelo)) return REFERENCIA_MTTO[key];
+  }
+  return null;
+}
 
 const INTERVALOS = ['250 h','500 h','1.000 h','2.000 h','3.000 h','4.000 h','6.000 h','8.000 h','12.000 h','Anual','Otro'];
 
@@ -879,6 +956,34 @@ function applyEquipoToForm(equipo){
   document.getElementById('horometroJustWrap').style.display = 'none';
   document.getElementById('f_horometroJust').value = '';
   renderHistorialEquipoMini(equipo);
+  renderReferenciaMtto(equipo);
+}
+
+function renderReferenciaMtto(equipo){
+  const box = document.getElementById('referenciaMttoCard');
+  if(currentServicio !== 'mtto'){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  const ref = getReferenciaEquipo(equipo);
+  if(!ref){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  box.style.display = 'block';
+  box.innerHTML = `
+    <div class="ref-card">
+      <div class="ref-head" id="refToggle">
+        <h3>📋 Referencia: ${esc(ref.label)}</h3>
+        <span class="chev open">▾</span>
+      </div>
+      <div class="ref-body" id="refBody">
+        <div class="ref-nota">${esc(ref.nota)}</div>
+        ${ref.tramos.map(t => `
+          <div class="ref-tramo">
+            <div class="ref-horas">${esc(t.horas)}</div>
+            <div class="ref-items">${t.items.map(esc).join(' · ')}</div>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  document.getElementById('refToggle').addEventListener('click', () => {
+    document.getElementById('refBody').classList.toggle('collapsed');
+    document.querySelector('#refToggle .chev').classList.toggle('open');
+  });
 }
 
 async function renderHistorialEquipoMini(equipo){
@@ -1403,7 +1508,10 @@ async function loadRecordIntoForm(id){
 
   populateFormAreaSelect(rec.area);
   populateFormEquipoSelect();
-  if(rec.equipoId) document.getElementById('f_equipo').value = rec.equipoId;
+  if(rec.equipoId){
+    document.getElementById('f_equipo').value = rec.equipoId;
+    renderReferenciaMtto(equipos.find(e => e.id === rec.equipoId));
+  }
   populateFormIntervalo();
   if(rec.intervalo) document.getElementById('f_intervalo').value = rec.intervalo;
 
