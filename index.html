@@ -583,10 +583,12 @@ const REFERENCIA_MTTO = {
   ingersoll_mm75: {
     label: 'Ingersoll Rand MM75',
     modelos: ['MM75'],
-    nota: 'Confirmar generación exacta del equipo — hay documentación histórica SSR con intervalos distintos.',
+    nota: 'Sin manual oficial confirmado — intervalos cruzados entre fuentes IA (más coherente entre ellas para este equipo). Confirmar generación exacta si es posible.',
     tramos: [
-      { horas: 'Anual / por indicador', horasNum: 0, siempre: true, items: ['Filtro de aire'] },
-      { horas: '2.000 h', horasNum: 2000, items: ['Filtro de coolant / lubricante'] },
+      { horas: 'Anual / por indicador', horasNum: 0, siempre: true, items: ['Filtro de aire (si no se alcanza antes el tramo de horas)'] },
+      { horas: '2.000 h', horasNum: 2000, items: ['Filtro de aire', 'Filtro de aceite/fluido', 'Muestra físico-química de lubricante'] },
+      { horas: '4.000 h', horasNum: 4000, items: ['Kit válvula de admisión', 'Kit válvula de retención/presión mínima', 'Limpieza de intercambiadores de calor'] },
+      { horas: '8.000 h', horasNum: 8000, items: ['Cambio de lubricante (Ultra Coolant)', 'Elemento separador aire/aceite', 'Kit electroválvulas de purga'] },
     ]
   },
   portatil: {
@@ -642,7 +644,12 @@ const REPUESTOS_CATALOGO = {
   ],
   ingersoll_mm75: [
     { descripcion: 'Filtro de aire', numeroParte: '' },
-    { descripcion: 'Filtro de coolant / lubricante', numeroParte: '' },
+    { descripcion: 'Filtro de aceite/fluido', numeroParte: '' },
+    { descripcion: 'Kit válvula de admisión', numeroParte: '' },
+    { descripcion: 'Kit válvula de retención/presión mínima', numeroParte: '' },
+    { descripcion: 'Lubricante Ultra Coolant', numeroParte: '' },
+    { descripcion: 'Elemento separador aire/aceite', numeroParte: '' },
+    { descripcion: 'Kit electroválvulas de purga', numeroParte: '' },
   ],
   portatil: [
     { descripcion: 'Aceite de motor', numeroParte: '' },
@@ -671,13 +678,19 @@ function intervalosParaEquipo(equipo){
   if(!ref) return INTERVALOS; // sin referencia mapeada -> lista genérica completa
   const nums = [...new Set(ref.tramos.filter(t => !t.siempre && t.horasNum).map(t => t.horasNum))].sort((a,b) => a-b);
   if(!nums.length) return INTERVALOS;
-  return nums.map(formatHorasLabel).concat(['Otro']);
+  const base = nums[0];
+  const max = nums[nums.length - 1];
+  const multiplos = [];
+  for(let h = base; h <= max; h += base) multiplos.push(h);
+  return multiplos.map(formatHorasLabel).concat(['Otro']);
 }
 
 // ============================================================
 // PAUTA DE MANTENCIÓN — armada dinámicamente según equipo + intervalo elegido.
-// Acumulativa (incluye todos los tramos hasta el intervalo elegido) y
-// deduplicada (un ítem que se repite en varios tramos aparece una sola vez).
+// Cada tramo se repite en su propio ciclo (ej. el de 2.000h aplica en 2.000,
+// 4.000, 6.000, 8.000... y el de 4.000h solo en 4.000, 8.000, 12.000...),
+// tal como funciona un plan de mantención real — no es acumulativo simple.
+// Deduplicada: un ítem que se repite en varios tramos aparece una sola vez.
 // ============================================================
 function parseIntervaloHoras(str){
   if(!str) return null;
@@ -737,7 +750,7 @@ function buildMttoPauta(){
   const vistos = new Set();
   if(ref){
     ref.tramos.forEach(t => {
-      const aplica = t.siempre || (intervaloNum != null && t.horasNum <= intervaloNum);
+      const aplica = t.siempre || (intervaloNum != null && intervaloNum !== Infinity && intervaloNum % t.horasNum === 0) || intervaloNum === Infinity;
       if(!aplica) return;
       t.items.forEach(it => { if(!vistos.has(it)){ vistos.add(it); especificaItems.push(it); } });
     });
@@ -2053,7 +2066,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v12'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v14'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
