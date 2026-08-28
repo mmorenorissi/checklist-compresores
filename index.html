@@ -223,27 +223,6 @@
       </div>
     </div>
 
-    <div class="card" id="startCard" style="display:none;">
-      <div class="card-pad">
-        <div class="field">
-          <label>Categoría de equipo</label>
-          <div class="subchoice">
-            <button data-cat="portatil" id="catPortatil">Portátiles</button>
-            <button data-cat="estatico" id="catEstatico">Estáticos</button>
-          </div>
-        </div>
-        <div class="field">
-          <label>Equipo</label>
-          <select id="startEquipo"></select>
-        </div>
-        <div class="field" id="startIntervaloWrap" style="display:none;">
-          <label>Intervalo de mantención</label>
-          <select id="startIntervalo"></select>
-        </div>
-        <button class="btn-full btn-primary" id="startBtn" style="background:var(--ink);color:#fff;">Iniciar</button>
-      </div>
-    </div>
-
     <div class="card">
       <div class="card-head"><h2>Últimos registros</h2></div>
       <div id="homeRecent"></div>
@@ -256,12 +235,33 @@
     <div class="card">
       <div class="card-head"><h2 id="formTitle">Servicio</h2><div class="sub" id="recIdLabel">registro nuevo</div></div>
       <div class="card-pad">
+        <div class="field">
+          <label>Categoría de equipo</label>
+          <div class="subchoice">
+            <button type="button" data-cat="portatil" id="catPortatil">Portátiles</button>
+            <button type="button" data-cat="estatico" id="catEstatico">Estáticos</button>
+          </div>
+        </div>
+        <div class="field">
+          <label>Equipo</label>
+          <select id="f_equipo"></select>
+        </div>
+        <div class="field" id="f_intervaloWrap" style="display:none;">
+          <label>Intervalo de mantención</label>
+          <select id="f_intervalo"></select>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Datos generales</h2></div>
+      <div class="card-pad">
         <div class="row2">
           <div class="field"><label>N° de Informe</label><input type="text" id="f_ninforme"></div>
           <div class="field"><label>Fecha</label><input type="date" id="f_fecha"></div>
         </div>
         <div class="row2">
-          <div class="field"><label>Área Intervenida</label><input type="text" id="f_area" value="Antucoya / SX-EW"></div>
+          <div class="field"><label>Área Intervenida</label><select id="f_area"></select></div>
           <div class="field"><label>Tipo de Servicio</label><input type="text" id="f_tiposervicio"></div>
         </div>
         <div class="row2">
@@ -293,6 +293,7 @@
       </div>
     </div>
 
+    <div id="estadoEquipoBadge" style="display:none;margin:0 0 8px;padding:10px 12px;border-radius:9px;font-weight:700;font-family:var(--font-display);font-size:13px;text-align:center;letter-spacing:.02em;"></div>
     <div class="summary-strip" id="summaryStrip">
       <div class="pill bueno"><b id="sumBueno">0</b>Bueno</div>
       <div class="pill regular"><b id="sumRegular">0</b>Regular</div>
@@ -421,9 +422,14 @@
         </div>
         <div class="row2">
           <div class="field"><label>Modelo</label><input type="text" id="eModelo" placeholder="Ej: XAS 98"></div>
+        <div class="row2">
           <div class="field"><label>N° de Serie</label><input type="text" id="eSerie"></div>
+          <div class="field"><label>N° Interno / TAG</label><input type="text" id="eInterno"></div>
         </div>
-        <div class="field"><label>Área / Ubicación</label><input type="text" id="eArea" value="Antucoya / SX-EW"></div>
+        <div class="row2">
+          <div class="field"><label>Área</label><select id="eArea"></select></div>
+          <div class="field"><label>Ubicación física</label><input type="text" id="eUbicacion" placeholder="Ej: Sala compresor"></div>
+        </div>
         <button class="btn-full" style="background:var(--steel);color:#fff;" id="addEquipoBtn">Agregar equipo</button>
       </div>
     </div>
@@ -445,18 +451,48 @@
 /* ============================================================
    DATOS BASE
    ============================================================ */
+// Maestro de equipos — extraído de GESTION_COMPRESORES_SDSO.xlsm (hojas STATUS_EQUIPOS_ESTACIONARIOS / STATUS_EQUIPOS_PORTATILES)
+const AREAS = ["Aglomerado", "Chancado Primario", "Chancado Secundario/Terciario", "Ripios", "SX-EW", "Truckshop"];
+
 const EQUIPOS_DEFAULT = [
-  { id:'PORT-N3', categoria:'portatil', nombre:'Portátil N°3', marca:'Kaeser', modelo:'M50', serie:'', area:'Antucoya / SX-EW' },
-  { id:'PORT-N4', categoria:'portatil', nombre:'Portátil N°4', marca:'Kaeser', modelo:'M50', serie:'1523', area:'Antucoya / SX-EW' },
-  { id:'PORT-N5', categoria:'portatil', nombre:'Portátil N°5', marca:'Atlas Copco', modelo:'XAS 98', serie:'WUP251074', area:'Antucoya / SX-EW' },
-  { id:'PORT-N6', categoria:'portatil', nombre:'Portátil N°6', marca:'Atlas Copco', modelo:'XAS 98', serie:'WUP251076', area:'Antucoya / SX-EW' },
-  { id:'PORT-N7', categoria:'portatil', nombre:'Portátil N°7', marca:'Atlas Copco', modelo:'XAS 88', serie:'APP877360', area:'Antucoya / SX-EW' },
-  { id:'EST-CSD105-1', categoria:'estatico', nombre:'CSD-105 (1)', marca:'Kaeser', modelo:'CSD-105', serie:'1072', area:'Antucoya / SX-EW' },
-  { id:'EST-CSD105-2', categoria:'estatico', nombre:'CSD-105 (2)', marca:'Kaeser', modelo:'CSD-105', serie:'1073', area:'Antucoya / SX-EW' },
-  { id:'EST-ASD40-1', categoria:'estatico', nombre:'ASD-40 (Transferencia)', marca:'Kaeser', modelo:'ASD-40', serie:'1029', area:'Antucoya / Secundario-Terciario' },
-  { id:'EST-ASD40-2', categoria:'estatico', nombre:'ASD-40 (CHT)', marca:'Kaeser', modelo:'ASD-40', serie:'1030', area:'Antucoya / Secundario-Terciario' },
-  { id:'EST-ASD40-3', categoria:'estatico', nombre:'ASD-40 (CHS)', marca:'Kaeser', modelo:'ASD-40', serie:'1031', area:'Antucoya / Secundario-Terciario' },
-  { id:'EST-CSDX165', categoria:'estatico', nombre:'CSDX 165', marca:'Kaeser', modelo:'CSDX 165', serie:'1095', area:'Antucoya / Truckshop' }
+  { id:'EQ01', categoria:'estatico', nombre:'COMP. TRUCKSHOP', marca:'Kaeser', modelo:'CSDX165', serie:'1095', interno:'', area:'Truckshop', ubicacion:'SALA COMPRESOR TRUCKSHOP' },
+  { id:'EQ02', categoria:'estatico', nombre:'COMP. N° 1 CHP', marca:'Atlas Copco', modelo:'GA160', serie:'APFS51321702', interno:'2100-DN001-C01', area:'Chancado Primario', ubicacion:'SALA SUPRESION PRIMARIA' },
+  { id:'EQ03', categoria:'estatico', nombre:'COMP. N° 1 CHST', marca:'Atlas Copco', modelo:'GA160', serie:'APF254572', interno:'2200-DN002-GC1-C01', area:'Chancado Secundario/Terciario', ubicacion:'SALA SUPRESION SECUNDARIO/TERCIARIO' },
+  { id:'EQ04', categoria:'estatico', nombre:'COMP. N° 2 CHST', marca:'Atlas Copco', modelo:'GA160', serie:'APF184353', interno:'2200-DN002-GC2-C01', area:'Chancado Secundario/Terciario', ubicacion:'SALA SUPRESION SECUNDARIO/TERCIARIO' },
+  { id:'EQ05', categoria:'estatico', nombre:'COMP. N° 3 CHST', marca:'Atlas Copco', modelo:'GA160', serie:'APF254629', interno:'2200-DN002-GC3-C01', area:'Chancado Secundario/Terciario', ubicacion:'SALA SUPRESION SECUNDARIO/TERCIARIO' },
+  { id:'EQ06', categoria:'estatico', nombre:'COMP. N° 4 CHST', marca:'Atlas Copco', modelo:'GA160', serie:'APF210552', interno:'2200-DN002-GC4-C01', area:'Chancado Secundario/Terciario', ubicacion:'SALA SUPRESION SECUNDARIO/TERCIARIO' },
+  { id:'EQ07', categoria:'estatico', nombre:'COMP. N° 5 CHST', marca:'Atlas Copco', modelo:'GA160', serie:'APF217115', interno:'2200-DN002-GC5-C01', area:'Chancado Secundario/Terciario', ubicacion:'SALA SUPRESION SECUNDARIO/TERCIARIO' },
+  { id:'EQ08', categoria:'estatico', nombre:'COMP. N° 1 SCP', marca:'Atlas Copco', modelo:'GA250', serie:'APF268974', interno:'2210-BN001-GC1', area:'Chancado Secundario/Terciario', ubicacion:'SALA COLECTORES SECUNDARIO / TERCIARIO' },
+  { id:'EQ09', categoria:'estatico', nombre:'COMP. N° 2 SCP', marca:'Atlas Copco', modelo:'GA75', serie:'API900641', interno:'2210-DC001-GC1', area:'Chancado Secundario/Terciario', ubicacion:'SALA COLECTORES SECUNDARIO / TERCIARIO' },
+  { id:'EQ10', categoria:'estatico', nombre:'COMP. N° 3 SCP', marca:'Atlas Copco', modelo:'GA55', serie:'API900655', interno:'2310-DC002-GC1', area:'Chancado Secundario/Terciario', ubicacion:'SALA COLECTORES SECUNDARIO / TERCIARIO' },
+  { id:'EQ11', categoria:'estatico', nombre:'COMP. N° 4 SCP', marca:'Atlas Copco', modelo:'GA15+', serie:'API340536', interno:'2310-BN001-GC1', area:'Chancado Secundario/Terciario', ubicacion:'SALA COLECTORES SECUNDARIO / TERCIARIO' },
+  { id:'EQ12', categoria:'estatico', nombre:'COMP. CHS', marca:'Kaeser', modelo:'ASD-40', serie:'1029', interno:'2200-BLP001-GC1-C01', area:'Chancado Secundario/Terciario', ubicacion:'SALA AIRE PLANTA CH SECUNDARIO' },
+  { id:'EQ13', categoria:'estatico', nombre:'COMP. CHT', marca:'Kaeser', modelo:'ASD-40', serie:'1030', interno:'2300-BLP001-GC1-C01', area:'Chancado Secundario/Terciario', ubicacion:'SALA AIRE PLANTA CH TERCIARIO' },
+  { id:'EQ14', categoria:'estatico', nombre:'COMP. TRANSFERENCIA', marca:'Kaeser', modelo:'ASD-40', serie:'1031', interno:'2300-BLP001-GC2-C01', area:'Chancado Secundario/Terciario', ubicacion:'SALA AIRE PLANTA TORRE TRANSFERENCIA' },
+  { id:'EQ15', categoria:'estatico', nombre:'COMP. AGLOMERADO', marca:'Ingersoll Rand', modelo:'MM75', serie:'', interno:'3100-GC001-C02', area:'Aglomerado', ubicacion:'SALA COMPRESOR AGLOMERADO' },
+  { id:'EQ16', categoria:'estatico', nombre:'COMP.N°1', marca:'Kaeser', modelo:'CSD-105', serie:'1072', interno:'', area:'SX-EW', ubicacion:'SALA-CALENTADORES' },
+  { id:'EQ17', categoria:'estatico', nombre:'COMP.N°2', marca:'Kaeser', modelo:'CSD-105', serie:'1073', interno:'', area:'SX-EW', ubicacion:'SALA-CALENTADORES' },
+  { id:'EQ18', categoria:'portatil', nombre:'COMP.N°1 (SX-EW)', marca:'Kaeser', modelo:'M50', serie:'1153', interno:'', area:'SX-EW', ubicacion:'PILAS LIXIVIACION' },
+  { id:'EQ19', categoria:'portatil', nombre:'COMP.N°2 (SX-EW)', marca:'Kaeser', modelo:'M50', serie:'', interno:'', area:'SX-EW', ubicacion:'PILAS LIXIVIACION' },
+  { id:'EQ20', categoria:'portatil', nombre:'COMP.N°3 (SX-EW)', marca:'Kaeser', modelo:'M50', serie:'', interno:'', area:'SX-EW', ubicacion:'PILAS LIXIVIACION' },
+  { id:'EQ21', categoria:'portatil', nombre:'COMP.N°8 (SX-EW)', marca:'Kaeser', modelo:'M50', serie:'', interno:'', area:'SX-EW', ubicacion:'PILAS LIXIVIACION' },
+  { id:'EQ22', categoria:'portatil', nombre:'COMP.N°4 (SX-EW)', marca:'Kaeser', modelo:'M50', serie:'1523', interno:'', area:'SX-EW', ubicacion:'PILAS LIXIVIACION' },
+  { id:'EQ23', categoria:'portatil', nombre:'COMP.N°6 (SX-EW)', marca:'Atlas Copco', modelo:'XAS98', serie:'WUP251076', interno:'', area:'SX-EW', ubicacion:'PILAS LIXIVIACION' },
+  { id:'EQ24', categoria:'portatil', nombre:'COMP.N°5 (SX-EW)', marca:'Atlas Copco', modelo:'XAS98', serie:'WUP251074', interno:'', area:'SX-EW', ubicacion:'PILAS LIXIVIACION' },
+  { id:'EQ25', categoria:'portatil', nombre:'COMP.N°7 (SX-EW)', marca:'Atlas Copco', modelo:'XAS88', serie:'APP877360', interno:'', area:'SX-EW', ubicacion:'PILAS LIXIVIACION' },
+  { id:'EQ26', categoria:'portatil', nombre:'COMP.N°1 (Ripios)', marca:'Atlas Copco', modelo:'U-190-1', serie:'', interno:'', area:'Ripios', ubicacion:'BOTADERO DE RIPIOS' },
+  { id:'EQ27', categoria:'portatil', nombre:'COMP.N°2 (Ripios)', marca:'Atlas Copco', modelo:'U-190-2', serie:'WUP201588', interno:'', area:'Ripios', ubicacion:'BOTADERO DE RIPIOS' },
+  { id:'EQ28', categoria:'portatil', nombre:'COMP.N°3 (Ripios)', marca:'Atlas Copco', modelo:'U-190-3', serie:'WUP201589', interno:'', area:'Ripios', ubicacion:'BOTADERO DE RIPIOS' },
+  { id:'EQ29', categoria:'portatil', nombre:'COMP.N°4 (Ripios)', marca:'Atlas Copco', modelo:'U-190-4', serie:'', interno:'', area:'Ripios', ubicacion:'BOTADERO DE RIPIOS' },
+  { id:'EQ30', categoria:'portatil', nombre:'COMP.N°5 (Ripios)', marca:'Atlas Copco', modelo:'XAS-98', serie:'WUP251074', interno:'', area:'Ripios', ubicacion:'BOTADERO DE RIPIOS' },
+  { id:'EQ31', categoria:'portatil', nombre:'COMP.N°6 (Ripios)', marca:'Atlas Copco', modelo:'XAS-97', serie:'', interno:'', area:'Ripios', ubicacion:'BOTADERO DE RIPIOS' },
+  { id:'EQ32', categoria:'portatil', nombre:'COMP.N°7 (Ripios)', marca:'Atlas Copco', modelo:'XAS-400', serie:'WUP153316', interno:'', area:'Ripios', ubicacion:'BOTADERO DE RIPIOS' }
+];
+
+const CRITICIDADES = [
+  { v:'alta', label:'Alta' },
+  { v:'media', label:'Media' },
+  { v:'baja', label:'Baja' }
 ];
 
 const INTERVALOS = ['250 h','500 h','1.000 h','2.000 h','3.000 h','4.000 h','6.000 h','8.000 h','12.000 h','Anual','Otro'];
@@ -672,57 +708,63 @@ function goToView(name){
   document.getElementById('actionbar-form').style.display = name === 'form' ? 'flex' : 'none';
   if(name === 'home') renderHome();
   if(name === 'history') loadHistory();
-  if(name === 'equip') renderEquipList();
+  if(name === 'equip'){ renderEquipList(); populateAreaSelectPlain('eArea'); }
   window.scrollTo(0,0);
 }
 
 /* ============================================================
    PORTADA
    ============================================================ */
-document.getElementById('choiceInspeccion').addEventListener('click', () => selectServicio('inspeccion'));
-document.getElementById('choiceMtto').addEventListener('click', () => selectServicio('mtto'));
+document.getElementById('choiceInspeccion').addEventListener('click', () => startNewForm('inspeccion'));
+document.getElementById('choiceMtto').addEventListener('click', () => startNewForm('mtto'));
 
-function selectServicio(servicio){
-  currentServicio = servicio;
-  document.getElementById('choiceInspeccion').classList.toggle('selected', servicio==='inspeccion');
-  document.getElementById('choiceMtto').classList.toggle('selected', servicio==='mtto');
-  document.getElementById('startIntervaloWrap').style.display = servicio==='mtto' ? 'block' : 'none';
-  document.getElementById('startCard').style.display = 'block';
-  populateStartIntervalo();
-  populateStartEquipoSelect();
-  document.getElementById('startCard').scrollIntoView({behavior:'smooth', block:'nearest'});
-}
-
-document.getElementById('catPortatil').addEventListener('click', () => { selectedChoiceCat='portatil'; syncCatButtons(); populateStartEquipoSelect(); });
-document.getElementById('catEstatico').addEventListener('click', () => { selectedChoiceCat='estatico'; syncCatButtons(); populateStartEquipoSelect(); });
+document.getElementById('catPortatil').addEventListener('click', () => { selectedChoiceCat='portatil'; syncCatButtons(); populateFormEquipoSelect(); });
+document.getElementById('catEstatico').addEventListener('click', () => { selectedChoiceCat='estatico'; syncCatButtons(); populateFormEquipoSelect(); });
 function syncCatButtons(){
   document.getElementById('catPortatil').classList.toggle('sel', selectedChoiceCat==='portatil');
   document.getElementById('catEstatico').classList.toggle('sel', selectedChoiceCat==='estatico');
 }
-syncCatButtons();
 
-function populateStartIntervalo(){
-  const sel = document.getElementById('startIntervalo');
+function populateAreaSelectPlain(id){
+  const sel = document.getElementById(id);
+  sel.innerHTML = AREAS.map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join('');
+}
+function populateAreaSelect(selected){
+  const sel = document.getElementById('f_area');
+  sel.innerHTML = `<option value="">Selecciona un área…</option>` + AREAS.map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join('');
+  if(selected) sel.value = selected;
+}
+function populateFormIntervalo(){
+  const sel = document.getElementById('f_intervalo');
   sel.innerHTML = INTERVALOS.map(i => `<option value="${esc(i)}">${esc(i)}</option>`).join('');
 }
-function populateStartEquipoSelect(){
-  const sel = document.getElementById('startEquipo');
+function populateFormEquipoSelect(){
+  const sel = document.getElementById('f_equipo');
   const list = equipos.filter(e => e.categoria === selectedChoiceCat);
-  sel.innerHTML = list.map(e => `<option value="${esc(e.id)}">${esc(e.nombre)} — ${esc(e.marca)} ${esc(e.modelo)}${e.serie ? ' · '+esc(e.serie) : ''}</option>`).join('')
-    || `<option value="">Sin equipos en esta categoría — agrégalos en "Equipos"</option>`;
+  sel.innerHTML = `<option value="">Selecciona un equipo…</option>` +
+    (list.map(e => `<option value="${esc(e.id)}">${esc(e.nombre)} — ${esc(e.marca)} ${esc(e.modelo)}${e.serie ? ' · '+esc(e.serie) : ''}</option>`).join('')
+    || '') ;
+  if(!list.length) sel.innerHTML = `<option value="">Sin equipos en esta categoría — agrégalos en "Equipos"</option>`;
+  applyEquipoToForm(null); // limpio hasta que se elija uno
+}
+document.getElementById('f_equipo').addEventListener('change', (e) => {
+  const equipo = equipos.find(eq => eq.id === e.target.value) || null;
+  applyEquipoToForm(equipo);
+});
+function applyEquipoToForm(equipo){
+  document.getElementById('f_marca').value = equipo ? equipo.marca : '';
+  document.getElementById('f_modelo').value = equipo ? equipo.modelo : '';
+  document.getElementById('f_serie').value = equipo ? equipo.serie : '';
+  document.getElementById('f_interno').value = equipo ? (equipo.interno || equipo.nombre) : '';
+  document.getElementById('f_ubicacion').value = equipo ? equipo.ubicacion : '';
+  if(equipo) populateAreaSelect(equipo.area);
 }
 
-document.getElementById('startBtn').addEventListener('click', () => {
-  const eqId = document.getElementById('startEquipo').value;
-  const equipo = equipos.find(e => e.id === eqId);
-  const intervalo = currentServicio === 'mtto' ? document.getElementById('startIntervalo').value : '';
-  startNewForm(currentServicio, equipo, intervalo);
+document.getElementById('f_intervalo').addEventListener('change', (e) => {
+  document.getElementById('f_tiposervicio').value = 'MANTENCIÓN — ' + e.target.value;
 });
 
 function renderHome(){
-  document.getElementById('choiceInspeccion').classList.remove('selected');
-  document.getElementById('choiceMtto').classList.remove('selected');
-  document.getElementById('startCard').style.display = 'none';
   renderHomeRecent();
 }
 async function renderHomeRecent(){
@@ -739,7 +781,7 @@ async function renderHomeRecent(){
    ============================================================ */
 function blankItemState(servicio){
   const state = {};
-  itemsForServicio(servicio).forEach(sec => sec.items.forEach((_, i) => { state[itemKey(sec.key,i)] = { status:'', obs:'' }; }));
+  itemsForServicio(servicio).forEach(sec => sec.items.forEach((_, i) => { state[itemKey(sec.key,i)] = { status:'', obs:'', criticidad:'' }; }));
   return state;
 }
 function blankPhotoState(servicio){
@@ -748,7 +790,7 @@ function blankPhotoState(servicio){
   return state;
 }
 
-function startNewForm(servicio, equipo, intervalo){
+function startNewForm(servicio){
   currentId = null;
   currentServicio = servicio;
   itemState = blankItemState(servicio);
@@ -757,25 +799,26 @@ function startNewForm(servicio, equipo, intervalo){
   repuestosRec = [];
   entregaState = {};
   sigData = { sigTecnico:null, sigSupervisor:null };
+  selectedChoiceCat = 'portatil';
 
   document.getElementById('formTitle').textContent = servicio === 'inspeccion' ? 'Inspección' : 'Mantención';
   document.getElementById('recIdLabel').textContent = 'registro nuevo';
   document.getElementById('btnDelete').style.display = 'none';
+  document.getElementById('f_intervaloWrap').style.display = servicio === 'mtto' ? 'block' : 'none';
+
+  syncCatButtons();
+  populateFormEquipoSelect();
+  populateFormIntervalo();
+  populateAreaSelect();
 
   document.getElementById('f_ninforme').value = '';
   document.getElementById('f_fecha').value = todayISO();
-  document.getElementById('f_area').value = equipo ? equipo.area : 'Antucoya / SX-EW';
-  document.getElementById('f_tiposervicio').value = servicio === 'inspeccion' ? 'INSPECCIÓN GENERAL' : ('MANTENCIÓN' + (intervalo ? ' — ' + intervalo : ''));
+  document.getElementById('f_tiposervicio').value = servicio === 'inspeccion' ? 'INSPECCIÓN GENERAL' : 'MANTENCIÓN';
   document.getElementById('f_tecnico').value = '';
   document.getElementById('f_supervisor').value = '';
   document.getElementById('f_horainicio').value = nowTimeHHMM();
   document.getElementById('f_horatermino').value = '';
 
-  document.getElementById('f_marca').value = equipo ? equipo.marca : '';
-  document.getElementById('f_modelo').value = equipo ? equipo.modelo : '';
-  document.getElementById('f_serie').value = equipo ? equipo.serie : '';
-  document.getElementById('f_interno').value = equipo ? equipo.nombre : '';
-  document.getElementById('f_ubicacion').value = equipo ? equipo.area : '';
   document.getElementById('f_horometro').value = '';
   document.getElementById('f_hallazgos').value = '';
   document.getElementById('f_entregadoA').value = '';
@@ -804,6 +847,7 @@ function renderSections(){
     sec.items.forEach((text, i) => {
       const key = itemKey(sec.key, i);
       const st = itemState[key];
+      const sinFoto = st.status === 'malo' && (!photoState[key] || !photoState[key].length);
       const div = document.createElement('div');
       div.className = 'item';
       div.dataset.key = key;
@@ -815,15 +859,27 @@ function renderSections(){
           <div class="status-btn malo ${st.status==='malo'?'sel':''}" data-status="malo">MALO</div>
           <div class="status-btn na ${st.status==='na'?'sel':''}" data-status="na">N/A</div>
         </div>
+        ${st.status === 'malo' ? `
+        <div class="field" style="margin-bottom:8px;">
+          <label style="color:var(--malo);">Criticidad de la no conformidad</label>
+          <select class="crit-select" style="width:100%;padding:9px 11px;border:1.5px solid var(--malo-bg);border-radius:8px;font-size:14px;background:#fff;">
+            <option value="">Selecciona criticidad…</option>
+            ${CRITICIDADES.map(c => `<option value="${c.v}" ${st.criticidad===c.v?'selected':''}>${c.label}</option>`).join('')}
+          </select>
+        </div>` : ''}
         <textarea placeholder="Observaciones…">${esc(st.obs||'')}</textarea>
+        ${sinFoto ? `<div style="color:var(--malo);font-size:11.5px;font-weight:700;margin-top:7px;">📷 Foto requerida para ítems marcados MALO</div>` : ''}
         <div class="photo-row"></div>
       `;
       div.querySelectorAll('.status-btn').forEach(btn => {
         btn.addEventListener('click', () => {
           itemState[key].status = (itemState[key].status === btn.dataset.status) ? '' : btn.dataset.status;
+          if(itemState[key].status !== 'malo') itemState[key].criticidad = '';
           renderSections(); updateSummary();
         });
       });
+      const critSelect = div.querySelector('.crit-select');
+      if(critSelect) critSelect.addEventListener('change', (e) => { itemState[key].criticidad = e.target.value; updateSummary(); });
       div.querySelector('textarea').addEventListener('input', (e) => { itemState[key].obs = e.target.value; });
       const photoRow = div.querySelector('.photo-row');
       renderPhotos(photoRow, key);
@@ -841,7 +897,7 @@ function renderPhotos(container, key){
     t.className = 'thumb';
     t.innerHTML = `<img src="${src}"><div class="rm">✕</div>`;
     t.querySelector('img').addEventListener('click', () => openPhotoModal(src));
-    t.querySelector('.rm').addEventListener('click', (e) => { e.stopPropagation(); photoState[key].splice(idx,1); renderPhotos(container, key); });
+    t.querySelector('.rm').addEventListener('click', (e) => { e.stopPropagation(); photoState[key].splice(idx,1); renderSections(); });
     container.appendChild(t);
   });
   const add = document.createElement('label');
@@ -853,6 +909,7 @@ function renderPhotos(container, key){
 }
 
 function handlePhotoFiles(files, key, container){
+  let pending = files.length;
   [...files].forEach(file => {
     const reader = new FileReader();
     reader.onload = (ev) => {
@@ -866,7 +923,8 @@ function handlePhotoFiles(files, key, container){
         const dataUrl = canvas.toDataURL('image/jpeg', 0.55);
         photoState[key] = photoState[key] || [];
         photoState[key].push(dataUrl);
-        renderPhotos(container, key);
+        pending--;
+        if(pending <= 0) renderSections(); else renderPhotos(container, key);
       };
       img.src = ev.target.result;
     };
@@ -875,6 +933,13 @@ function handlePhotoFiles(files, key, container){
 }
 function openPhotoModal(src){ document.getElementById('photoModalImg').src = src; document.getElementById('photoModal').classList.add('show'); }
 document.getElementById('photoModal').addEventListener('click', () => document.getElementById('photoModal').classList.remove('show'));
+
+function computeEquipoEstado(items){
+  const malos = Object.values(items).filter(s => s.status === 'malo');
+  if(malos.some(s => s.criticidad === 'alta')) return { label:'CRÍTICO — FUERA DE SERVICIO', cls:'malo' };
+  if(malos.length) return { label:'OPERATIVO CON OBSERVACIONES', cls:'regular' };
+  return { label:'OPERATIVO', cls:'bueno' };
+}
 
 function updateSummary(){
   let bueno=0, regular=0, malo=0, na=0, pend=0;
@@ -890,6 +955,17 @@ function updateSummary(){
   document.getElementById('sumMalo').textContent = malo;
   document.getElementById('sumNA').textContent = na;
   document.getElementById('sumPend').textContent = pend;
+
+  const badge = document.getElementById('estadoEquipoBadge');
+  if(bueno+regular+malo > 0){
+    const estado = computeEquipoEstado(itemState);
+    badge.style.display = 'block';
+    badge.textContent = 'ESTADO DEL EQUIPO: ' + estado.label;
+    badge.style.background = estado.cls==='malo' ? 'var(--malo-bg)' : estado.cls==='regular' ? 'var(--regular-bg)' : 'var(--bueno-bg)';
+    badge.style.color = estado.cls==='malo' ? 'var(--malo)' : estado.cls==='regular' ? 'var(--regular)' : 'var(--bueno)';
+  } else {
+    badge.style.display = 'none';
+  }
 }
 
 /* ---- repuestos utilizados (dinámico) ---- */
@@ -987,6 +1063,9 @@ function buildRecord(){
     id: currentId || ('reg_' + Date.now()),
     servicio: currentServicio,
     savedAt: new Date().toISOString(),
+    categoria: selectedChoiceCat,
+    equipoId: document.getElementById('f_equipo').value,
+    intervalo: currentServicio === 'mtto' ? document.getElementById('f_intervalo').value : '',
     ninforme: document.getElementById('f_ninforme').value,
     fecha: document.getElementById('f_fecha').value,
     area: document.getElementById('f_area').value,
@@ -1013,11 +1092,23 @@ function buildRecord(){
   };
 }
 function summarizeItems(items){
-  let bueno=0, regular=0, malo=0;
-  Object.values(items).forEach(s => { if(s.status==='bueno') bueno++; else if(s.status==='regular') regular++; else if(s.status==='malo') malo++; });
-  return {bueno, regular, malo};
+  let bueno=0, regular=0, malo=0, criticoAlta=0;
+  Object.values(items).forEach(s => {
+    if(s.status==='bueno') bueno++;
+    else if(s.status==='regular') regular++;
+    else if(s.status==='malo'){ malo++; if(s.criticidad==='alta') criticoAlta++; }
+  });
+  return {bueno, regular, malo, criticoAlta};
+}
+function itemsSinFotoObligatoria(){
+  return Object.entries(itemState).filter(([key, s]) => s.status==='malo' && (!photoState[key] || !photoState[key].length));
 }
 async function saveRecord(){
+  const faltanFoto = itemsSinFotoObligatoria();
+  if(faltanFoto.length){
+    const ok = confirm(`Hay ${faltanFoto.length} ítem(s) marcados MALO sin fotografía. ¿Guardar de todas formas?`);
+    if(!ok) return;
+  }
   const rec = buildRecord();
   currentId = rec.id;
   const sizeKB = Math.round(JSON.stringify(rec).length/1024);
@@ -1036,7 +1127,7 @@ async function updateIndex(rec){
   const counts = summarizeItems(rec.items);
   idx.unshift({
     id: rec.id, servicio: rec.servicio, equipoLabel: rec.interno || rec.modelo, marcaModelo: (rec.marca+' '+rec.modelo).trim(),
-    serie: rec.serie, fecha: rec.fecha, savedAt: rec.savedAt, malo: counts.malo, bueno: counts.bueno
+    serie: rec.serie, fecha: rec.fecha, savedAt: rec.savedAt, malo: counts.malo, bueno: counts.bueno, criticoAlta: counts.criticoAlta
   });
   await storage.set('registros_index', idx);
 }
@@ -1061,9 +1152,18 @@ async function loadRecordIntoForm(id){
   document.getElementById('formTitle').textContent = rec.servicio === 'inspeccion' ? 'Inspección' : 'Mantención';
   document.getElementById('recIdLabel').textContent = 'guardado · ' + rec.id;
   document.getElementById('btnDelete').style.display = 'block';
+  document.getElementById('f_intervaloWrap').style.display = rec.servicio === 'mtto' ? 'block' : 'none';
+
+  selectedChoiceCat = rec.categoria || 'portatil';
+  syncCatButtons();
+  populateFormEquipoSelect();
+  if(rec.equipoId) document.getElementById('f_equipo').value = rec.equipoId;
+  populateFormIntervalo();
+  if(rec.intervalo) document.getElementById('f_intervalo').value = rec.intervalo;
+  populateAreaSelect(rec.area);
+
   document.getElementById('f_ninforme').value = rec.ninforme || '';
   document.getElementById('f_fecha').value = rec.fecha || '';
-  document.getElementById('f_area').value = rec.area || '';
   document.getElementById('f_tiposervicio').value = rec.tiposervicio || '';
   document.getElementById('f_tecnico').value = rec.tecnico || '';
   document.getElementById('f_supervisor').value = rec.supervisor || '';
@@ -1092,17 +1192,17 @@ document.querySelectorAll('.filter-chip').forEach(chip => {
 });
 function historyRowHTML(item){
   const badgeText = (item.equipoLabel||'').replace(/[^0-9]/g,'').slice(-2) || (item.servicio==='inspeccion'?'IN':'MT');
-  const badgeClass = item.malo > 0 ? 'malo' : 'bueno';
-  const chipClass = item.malo > 0 ? 'malo' : 'bueno';
-  const chipText = item.malo > 0 ? item.malo + ' malo' : 'sin fallas';
+  let cls = 'bueno', chipText = 'Operativo';
+  if(item.criticoAlta > 0){ cls = 'malo'; chipText = 'Crítico'; }
+  else if(item.malo > 0){ cls = 'regular'; chipText = item.malo + ' con obs.'; }
   const servicioLabel = item.servicio === 'inspeccion' ? 'Inspección' : 'Mantención';
   return `<div class="hist-item" data-open="${item.id}">
-    <div class="hist-badge ${badgeClass}">${esc(badgeText)}</div>
+    <div class="hist-badge ${cls==='malo'?'malo':cls==='regular'?'regular':'bueno'}" style="${cls==='regular'?'background:var(--regular);':''}">${esc(badgeText)}</div>
     <div class="hist-main">
       <div class="t1">${esc(item.equipoLabel || item.marcaModelo || 'Equipo')}</div>
       <div class="t2">${esc(servicioLabel)} · ${esc(item.fecha||'—')} · ${esc(item.serie||'')}</div>
     </div>
-    <div class="hist-chip ${chipClass}">${esc(chipText)}</div>
+    <div class="hist-chip" style="${cls==='malo'?'background:var(--malo-bg);color:var(--malo);':cls==='regular'?'background:var(--regular-bg);color:var(--regular);':'background:var(--bueno-bg);color:var(--bueno);'}">${esc(chipText)}</div>
   </div>`;
 }
 async function loadHistory(){
@@ -1166,12 +1266,15 @@ document.getElementById('addEquipoBtn').addEventListener('click', async () => {
   const marca = document.getElementById('eMarca').value.trim();
   const modelo = document.getElementById('eModelo').value.trim();
   const serie = document.getElementById('eSerie').value.trim();
-  const area = document.getElementById('eArea').value.trim();
+  const interno = document.getElementById('eInterno').value.trim();
+  const area = document.getElementById('eArea').value;
+  const ubicacion = document.getElementById('eUbicacion').value.trim();
   if(!nombre || !marca){ toast('Completa al menos Nombre y Marca'); return; }
-  equipos.push({ id: 'EQ-' + Date.now(), categoria: newEquipCat, nombre, marca, modelo, serie, area });
+  equipos.push({ id: 'EQ-' + Date.now(), categoria: newEquipCat, nombre, marca, modelo, serie, interno, area, ubicacion });
   await saveEquipos();
   document.getElementById('eNombre').value=''; document.getElementById('eMarca').value='';
   document.getElementById('eModelo').value=''; document.getElementById('eSerie').value='';
+  document.getElementById('eInterno').value=''; document.getElementById('eUbicacion').value='';
   toast('✓ Equipo agregado');
   renderEquipList();
 });
@@ -1229,10 +1332,18 @@ function buildPrintArea(){
   const entregadoA = document.getElementById('f_entregadoA').value || '—';
   const cargo = document.getElementById('f_cargo').value || '—';
 
+  const equipoSel = equipos.find(e => e.id === document.getElementById('f_equipo').value);
+  const equipoNombre = equipoSel ? equipoSel.nombre : (interno !== '—' ? interno : 'Equipo');
+  const counts = summarizeItems(itemState);
+  const estado = computeEquipoEstado(itemState);
+
   let html = `
     <h1>INFORME DE SERVICIO — ${esc(servicioLabel)}</h1>
-    <h2>Mantención y Reparación de Equipos de Aire Comprimido — Minera Antucoya</h2>
+    <h2>ANT-PHN-25-006 Rev.01 — Mantención y Reparación de Equipos de Aire Comprimido — Minera Antucoya</h2>
     <div class="p-meta">
+      <b>Equipo:</b> ${esc(equipoNombre)} &nbsp;·&nbsp; <b>Marca/Modelo:</b> ${esc(marca)} ${esc(modelo)} &nbsp;·&nbsp; <b>Serie:</b> ${esc(serie)} &nbsp;·&nbsp; <b>Horómetro:</b> ${esc(horometro)}<br>
+      <b>Resultado:</b> ${counts.bueno} Bueno / ${counts.regular} Regular / ${counts.malo} Malo &nbsp;·&nbsp;
+      <b style="color:${estado.cls==='malo'?'#C23B22':estado.cls==='regular'?'#B8860B':'#1E8E5A'}">ESTADO: ${esc(estado.label)}</b><br><br>
       <b>1. Datos Generales</b> — N° Informe: ${esc(ninforme)} · Fecha: ${esc(fecha)} · Área: ${esc(area)} · Tipo de servicio: ${esc(tiposervicio)}<br>
       Técnico(s): ${esc(tecnico)} · Supervisor: ${esc(supervisor)} · Hora inicio: ${esc(horainicio)} · Hora término: ${esc(horatermino)}<br><br>
       <b>2. Datos del Equipo</b> — Marca: ${esc(marca)} · Modelo: ${esc(modelo)} · N° Serie: ${esc(serie)}<br>
@@ -1246,15 +1357,16 @@ function buildPrintArea(){
       const key = itemKey(sec.key, i);
       const st = itemState[key];
       if(st && (st.status === 'bueno' || st.status === 'regular' || st.status === 'malo')){
-        evaluados.push({ seccion: sec.title, texto: text, status: st.status, obs: st.obs, photos: photoState[key]||[] });
+        evaluados.push({ seccion: sec.title, texto: text, status: st.status, criticidad: st.criticidad, obs: st.obs, photos: photoState[key]||[] });
       }
     });
   });
   html += `<div class="p-sec">3. VERIFICACIÓN DE COMPONENTES</div>`;
   if(evaluados.length){
-    html += `<table class="p-table"><tr><th style="width:38%">Componente</th><th style="width:12%">Estado</th><th>Observaciones</th></tr>`;
+    html += `<table class="p-table"><tr><th style="width:34%">Componente</th><th style="width:10%">Estado</th><th style="width:10%">Criticidad</th><th>Observaciones</th></tr>`;
     evaluados.forEach(e => {
-      html += `<tr><td>${esc(e.texto)}</td><td class="p-status">${statusLabelUpper(e.status)}</td><td>${esc(e.obs||'—')}</td></tr>`;
+      const crit = e.status === 'malo' && e.criticidad ? e.criticidad.toUpperCase() : '—';
+      html += `<tr><td>${esc(e.texto)}</td><td class="p-status">${statusLabelUpper(e.status)}</td><td>${esc(crit)}</td><td>${esc(e.obs||'—')}</td></tr>`;
     });
     html += `</table>`;
   } else {
