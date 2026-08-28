@@ -560,13 +560,13 @@ const REFERENCIA_MTTO = {
     modelos: ['CSD-105', 'CSDX165', 'ASD-40'],
     nota: 'Aceite de referencia: SIGMA FLUID S-460. Sala cerrada — sin adelanto de horas por ambiente.',
     tramos: [
-      { horas: 'Semanal', items: ['Nivel de aceite refrigerante', 'Esterilla filtro armario eléctrico'] },
-      { horas: '1.000 h', items: ['Limpieza de enfriador', 'Esterilla filtro aire refrigerante'] },
-      { horas: '3.000 h', items: ['Elemento filtro de aire (recambio)', 'Esterilla armario (recambio)'] },
-      { horas: '6.000 h (mín. 1x año)', items: ['Filtro de aceite'] },
-      { horas: '6.000 h (máx. 3 años)', items: ['Cartucho separador de aceite'] },
-      { horas: '6.000 h (4.000 h si condición desfavorable)', items: ['Aceite S-460'] },
-      { horas: '6.000–12.000 h según modelo', items: ['Rodamientos de motor'] },
+      { horas: 'Semanal', horasNum: 0, siempre: true, items: ['Nivel de aceite refrigerante', 'Esterilla filtro armario eléctrico'] },
+      { horas: '1.000 h', horasNum: 1000, items: ['Limpieza de enfriador', 'Esterilla filtro aire refrigerante'] },
+      { horas: '3.000 h', horasNum: 3000, items: ['Elemento filtro de aire (recambio)', 'Esterilla armario (recambio)'] },
+      { horas: '6.000 h (mín. 1x año)', horasNum: 6000, items: ['Filtro de aceite'] },
+      { horas: '6.000 h (máx. 3 años)', horasNum: 6000, items: ['Cartucho separador de aceite'] },
+      { horas: '6.000 h (4.000 h si condición desfavorable)', horasNum: 4000, items: ['Aceite S-460'] },
+      { horas: '6.000–12.000 h según modelo', horasNum: 6000, items: ['Rodamientos de motor'] },
     ]
   },
   atlascopco_ga: {
@@ -574,10 +574,10 @@ const REFERENCIA_MTTO = {
     modelos: ['GA160', 'GA250', 'GA75', 'GA55', 'GA15+'],
     nota: 'Aceite de referencia: Roto-Inject (mineral). Si el equipo usa Roto-Xtend (sintético), el cambio de aceite se extiende a 8.000h. Confirmar en placa si es versión "+".',
     tramos: [
-      { horas: '2.000 h', items: ['Filtro de aire', 'Filtro de aceite', 'Muestra de aceite'] },
-      { horas: '4.000 h', items: ['Cambio de aceite completo', 'Kit válvulas admisión/presión mínima'] },
-      { horas: '8.000 h', items: ['Filtro separador aire/aceite', 'Termostato y acoplamiento'] },
-      { horas: '16.000 h', items: ['Mangueras hidráulicas / solenoides'] },
+      { horas: '2.000 h', horasNum: 2000, items: ['Filtro de aire', 'Filtro de aceite', 'Muestra de aceite'] },
+      { horas: '4.000 h', horasNum: 4000, items: ['Cambio de aceite completo', 'Kit válvulas admisión/presión mínima'] },
+      { horas: '8.000 h', horasNum: 8000, items: ['Filtro separador aire/aceite', 'Termostato y acoplamiento'] },
+      { horas: '16.000 h', horasNum: 16000, items: ['Mangueras hidráulicas / solenoides'] },
     ]
   },
   ingersoll_mm75: {
@@ -585,8 +585,8 @@ const REFERENCIA_MTTO = {
     modelos: ['MM75'],
     nota: 'Confirmar generación exacta del equipo — hay documentación histórica SSR con intervalos distintos.',
     tramos: [
-      { horas: 'Anual / por indicador', items: ['Filtro de aire'] },
-      { horas: '2.000 h', items: ['Filtro de coolant / lubricante'] },
+      { horas: 'Anual / por indicador', horasNum: 0, siempre: true, items: ['Filtro de aire'] },
+      { horas: '2.000 h', horasNum: 2000, items: ['Filtro de coolant / lubricante'] },
     ]
   },
   portatil: {
@@ -594,9 +594,9 @@ const REFERENCIA_MTTO = {
     modelos: [], // se activa por categoria === 'portatil'
     nota: 'Intervalos adelantados a la mitad respecto al fabricante (250/500/1.000h en vez de 500/1.000/2.000h) por exposición a sol y polvo — misma tabla para todos los portátiles.',
     tramos: [
-      { horas: '250 h', items: ['Aceite de motor', 'Filtro de aceite de motor', 'Filtro de combustible'] },
-      { horas: '500 h', items: ['Filtro de aire compresor', 'Aceite de compresor', 'Calibración de válvulas motor'] },
-      { horas: '1.000 h', items: ['Separador de aceite', 'Kit válvula de carga/presión mínima'] },
+      { horas: '250 h', horasNum: 250, items: ['Aceite de motor', 'Filtro de aceite de motor', 'Filtro de combustible'] },
+      { horas: '500 h', horasNum: 500, items: ['Filtro de aire compresor', 'Aceite de compresor', 'Calibración de válvulas motor'] },
+      { horas: '1.000 h', horasNum: 1000, items: ['Separador de aceite', 'Kit válvula de carga/presión mínima'] },
     ]
   }
 };
@@ -610,7 +610,87 @@ function getReferenciaEquipo(equipo){
   return null;
 }
 
-const INTERVALOS = ['250 h','500 h','1.000 h','2.000 h','3.000 h','4.000 h','6.000 h','8.000 h','12.000 h','Anual','Otro'];
+const INTERVALOS = ['250 h','500 h','1.000 h','2.000 h','3.000 h','4.000 h','6.000 h','8.000 h','12.000 h','16.000 h','Anual','Otro'];
+
+// ============================================================
+// PAUTA DE MANTENCIÓN — armada dinámicamente según equipo + intervalo elegido.
+// Acumulativa (incluye todos los tramos hasta el intervalo elegido) y
+// deduplicada (un ítem que se repite en varios tramos aparece una sola vez).
+// ============================================================
+function parseIntervaloHoras(str){
+  if(!str) return null;
+  if(str === 'Otro' || str === 'Anual') return Infinity; // ambiguo/mayor ciclo -> se muestra todo
+  const n = parseInt(String(str).replace(/[^\d]/g, ''), 10);
+  return isNaN(n) ? null : n;
+}
+
+const MTTO_SEGURIDAD = [
+  'Bloqueo/etiquetado (LOTO) aplicado antes de intervenir.',
+  'Registro en libro de bloqueo completado.',
+  'Registro de segregación del área realizado.',
+];
+const MTTO_COMPONENTES_INSPECCION = [
+  'Alternador/motor: voltaje de salida y estado físico verificado.',
+  'Motor de arranque o accionamiento: comprobación de conexiones eléctricas.',
+  'Correas y poleas: tensión, alineación y desgaste (inspección, salvo cambio indicado arriba).',
+  'Mangueras y conexiones: grietas, resequedad, fugas (inspección, salvo cambio indicado arriba).',
+  'Conexiones eléctricas generales verificadas y ajustadas.',
+];
+const MTTO_PUESTA_MARCHA = [
+  'Indicadores, luces piloto y controlador verificados en condiciones normales.',
+  'Válvula de descarga de aire abierta en forma gradual y progresiva.',
+  'Estabilización de presión monitoreada dentro de parámetros normales.',
+  'Ausencia de fugas de aire y aceite verificada tras la presurización.',
+  'Todas las protecciones y puertas laterales reinstaladas correctamente.',
+];
+// Fallback genérico si el equipo aún no tiene familia mapeada en REFERENCIA_MTTO
+const MTTO_GENERICO_FALLBACK = [
+  'Nivel y estado de aceite/lubricante verificado.',
+  'Filtros (aire/aceite/combustible según corresponda) revisados o reemplazados.',
+  'Elemento separador aire-aceite revisado (si aplica).',
+  'Rodamientos monitoreados/engrasados (si aplica).',
+];
+
+const MTTO_ESTRUCTURA_PORTATIL = [
+  'Presión de neumáticos verificada.',
+  'Torque de tuercas de rueda verificado.',
+  'Sistema de frenos verificado / ajustado (si aplica).',
+  'Bisagras de puertas engrasadas.',
+  'Cáncamo de izado / cupla de remolque engrasados.',
+  'Capota y carrocería: estado general verificado (sin cuñas, abolladuras, roturas).',
+];
+
+function buildMttoPauta(){
+  const equipoId = document.getElementById('f_equipo') ? document.getElementById('f_equipo').value : '';
+  const equipo = equipos.find(e => e.id === equipoId);
+  const intervaloStr = document.getElementById('f_intervalo') ? document.getElementById('f_intervalo').value : '';
+  const intervaloNum = parseIntervaloHoras(intervaloStr);
+  const ref = equipo ? getReferenciaEquipo(equipo) : null;
+
+  const especificaItems = [];
+  const vistos = new Set();
+  if(ref){
+    ref.tramos.forEach(t => {
+      const aplica = t.siempre || (intervaloNum != null && t.horasNum <= intervaloNum);
+      if(!aplica) return;
+      t.items.forEach(it => { if(!vistos.has(it)){ vistos.add(it); especificaItems.push(it); } });
+    });
+  }
+  if(!especificaItems.length){
+    MTTO_GENERICO_FALLBACK.forEach(it => especificaItems.push(it));
+  }
+
+  const secciones = [
+    { key:'seguridad', title:'SEGURIDAD Y BLOQUEO', items: MTTO_SEGURIDAD },
+    { key:'especifica', title: ref ? `MANTENCIÓN — ${ref.label.toUpperCase()}` : 'MANTENCIÓN — TAREAS GENÉRICAS (equipo sin referencia aún)', items: especificaItems },
+    { key:'componentes', title:'COMPONENTES Y CONEXIONES', items: MTTO_COMPONENTES_INSPECCION },
+  ];
+  if(equipo && equipo.categoria === 'portatil'){
+    secciones.push({ key:'estructura', title:'ESTRUCTURA Y MOVILIDAD (PORTÁTIL)', items: MTTO_ESTRUCTURA_PORTATIL });
+  }
+  secciones.push({ key:'puesta', title:'PUESTA EN MARCHA Y PRUEBAS', items: MTTO_PUESTA_MARCHA });
+  return secciones;
+}
 
 // Pauta de INSPECCIÓN (23 ítems, ANT-PHN-25-006 Rev.01)
 const INSPECCION_ITEMS = [
@@ -647,70 +727,6 @@ const INSPECCION_ITEMS = [
   ]}
 ];
 
-// Pauta de MANTENCIÓN — genérica, 44 ítems, cubre portátiles y estáticos (fuente: manuales KAESER CSD105/ASD40 y Atlas Copco XAS400).
-// Lo que no aplique al equipo/intervalo específico se marca N/A.
-const MTTO_ITEMS = [
-  { key:'motor', title:'MOTOR / ACCIONAMIENTO', items:[
-    'Nivel de aceite de motor verificado con varilla medidora (diésel).',
-    'Aceite de motor drenado y reemplazado según especificación del fabricante.',
-    'Filtro de aceite de motor reemplazado.',
-    'Filtro de combustible reemplazado; drenaje de agua del filtro verificado.',
-    'Filtro de aire de admisión de motor revisado/reemplazado.',
-    'Nivel y estado de refrigerante de motor verificado (color, limpieza, sin contaminación).',
-    'Batería: nivel de electrolito y terminales revisados (portátiles).',
-    'Rodamientos de motor eléctrico revisados según contador SIGMA CONTROL (estáticos).',
-    'Conexiones eléctricas del motor verificadas y ajustadas.'
-  ]},
-  { key:'unidad', title:'UNIDAD COMPRESORA (TORNILLO)', items:[
-    'Nivel de aceite refrigerante / unidad compresora verificado en visor.',
-    'Aceite refrigerante de la unidad cambiado según intervalo del fabricante (SIGMA FLUID / tabla de lubricantes).',
-    'Filtro de aceite de la unidad compresora reemplazado y ajustado a torque.',
-    'Filtro separador aire-aceite reemplazado; carcasa cerrada sin fugas.',
-    'Elemento separador revisado/reemplazado (portátiles).',
-    'Acoplamiento motor-unidad revisado.',
-    'Válvulas de la unidad revisadas (alta hora, según indicación de controlador).',
-    'Rodamientos del lado unidad compresora monitoreados/engrasados.'
-  ]},
-  { key:'enfriamiento', title:'SISTEMA DE ENFRIAMIENTO', items:[
-    'Radiador / enfriador limpiado.',
-    'Intercooler limpiado (si aplica).',
-    'Estanqueidad del refrigerador verificada (sin fugas).',
-    'Esterilla / manto filtrante de aire refrigerante limpiado o reemplazado.',
-    'Sistema de refrigeración por agua revisado (si aplica).'
-  ]},
-  { key:'filtros', title:'FILTROS, PURGA Y ARMARIO ELÉCTRICO', items:[
-    'Purgador de condensados: mantenimiento realizado.',
-    'Armario / tablero eléctrico: esterilla filtrante revisada o cambiada.'
-  ]},
-  { key:'seguridad', title:'SEGURIDAD Y CONTROL', items:[
-    'Válvula de seguridad / alivio verificada.',
-    'Desconexión automática por sobretemperatura verificada.',
-    'Interruptores / switches de apagado verificados.',
-    'Controlador (SIGMA CONTROL / panel) revisado: alarmas y contadores de mantención reseteados.'
-  ]},
-  { key:'electrico', title:'COMPONENTES ELÉCTRICOS Y TRANSMISIÓN', items:[
-    'Alternador: voltaje de salida medido y estado físico verificado.',
-    'Motor de arranque: accionamiento y conexiones eléctricas comprobados.',
-    'Correas y poleas: tensión, alineación y desgaste verificados.',
-    'Mangueras y conexiones: grietas, resequedad, abultamientos o fugas revisadas.'
-  ]},
-  { key:'estructura', title:'ESTRUCTURA Y MOVILIDAD (PORTÁTILES)', items:[
-    'Presión de neumáticos verificada.',
-    'Torque de tuercas de rueda verificado.',
-    'Sistema de frenos verificado / ajustado (si aplica).',
-    'Bisagras de puertas engrasadas.',
-    'Cáncamo de izado / cupla de remolque engrasados.',
-    'Capota y carrocería: estado general verificado (sin cuñas, abolladuras, roturas).'
-  ]},
-  { key:'puesta', title:'PUESTA EN MARCHA Y PRUEBAS', items:[
-    'Bloqueo/etiquetado retirado y corta corriente posicionado en ON.',
-    'Indicadores, luces piloto y controlador verificados en condiciones normales.',
-    'Válvula de descarga de aire abierta en forma gradual y progresiva.',
-    'Estabilización de presión monitoreada dentro de parámetros normales.',
-    'Ausencia de fugas de aire y aceite verificada tras la presurización.',
-    'Todas las protecciones y puertas laterales reinstaladas correctamente.'
-  ]}
-];
 
 const ENTREGA_ITEMS = [
   'Estado inicial del equipo registrado',
@@ -721,7 +737,7 @@ const ENTREGA_ITEMS = [
   'Equipo probado y en condiciones de operar'
 ];
 
-function itemsForServicio(servicio){ return servicio === 'inspeccion' ? INSPECCION_ITEMS : MTTO_ITEMS; }
+function itemsForServicio(servicio){ return servicio === 'inspeccion' ? INSPECCION_ITEMS : buildMttoPauta(); }
 
 /* ============================================================
    ALMACENAMIENTO PROPIO (IndexedDB) — independiente, en este dispositivo.
@@ -945,6 +961,7 @@ function populateFormEquipoSelect(){
 document.getElementById('f_equipo').addEventListener('change', (e) => {
   const equipo = equipos.find(eq => eq.id === e.target.value) || null;
   applyEquipoToForm(equipo);
+  rebuildMttoPautaIfNeeded();
 });
 function applyEquipoToForm(equipo){
   document.getElementById('f_marca').value = equipo ? equipo.marca : '';
@@ -957,6 +974,16 @@ function applyEquipoToForm(equipo){
   document.getElementById('f_horometroJust').value = '';
   renderHistorialEquipoMini(equipo);
   renderReferenciaMtto(equipo);
+}
+
+// Rearma la pauta de Mantención (secciones + ítems) cuando cambia el equipo o el
+// intervalo elegido. Solo aplica al servicio Mantención — Inspección no cambia.
+function rebuildMttoPautaIfNeeded(){
+  if(currentServicio !== 'mtto') return;
+  itemState = blankItemState('mtto');
+  photoState = blankPhotoState('mtto');
+  renderSections();
+  updateSummary();
 }
 
 function renderReferenciaMtto(equipo){
@@ -1018,6 +1045,7 @@ document.getElementById('f_horometro').addEventListener('input', async () => {
 
 document.getElementById('f_intervalo').addEventListener('change', (e) => {
   document.getElementById('f_tiposervicio').value = 'MANTENCIÓN — ' + e.target.value;
+  rebuildMttoPautaIfNeeded();
 });
 
 /* ============================================================
@@ -1118,8 +1146,6 @@ function blankPhotoState(servicio){
 function startNewForm(servicio){
   currentId = null;
   currentServicio = servicio;
-  itemState = blankItemState(servicio);
-  photoState = blankPhotoState(servicio);
   repuestosUsados = [];
   repuestosRec = [];
   entregaState = {};
@@ -1133,6 +1159,11 @@ function startNewForm(servicio){
   populateFormAreaSelect();
   populateFormEquipoSelect();
   populateFormIntervalo();
+
+  // se arma DESPUÉS de limpiar los selects, para que la pauta inicial no herede
+  // el equipo/intervalo de un registro anterior
+  itemState = blankItemState(servicio);
+  photoState = blankPhotoState(servicio);
 
   const ninformeEl = document.getElementById('f_ninforme');
   ninformeEl.value = '';
