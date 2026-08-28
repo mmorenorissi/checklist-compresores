@@ -167,9 +167,9 @@
 
   #printArea{display:none;}
   @media print{
-    body *{visibility:hidden;}
-    #printArea, #printArea *{visibility:visible;}
-    #printArea{display:block;position:absolute;top:0;left:0;width:100%;padding:16px;font-family:Arial,sans-serif;color:#111;}
+    html, body{height:auto !important;}
+    .topbar, main, .actionbar, .toast, .modal-bg{display:none !important;}
+    #printArea{display:block !important;position:static;width:100%;padding:16px;font-family:Arial,sans-serif;color:#111;}
     #printArea h1{font-size:18px;margin:0 0 2px;}
     #printArea h2{font-size:14px;margin:0;}
     .p-meta{font-size:11px;color:#333;margin:6px 0 10px;line-height:1.5;}
