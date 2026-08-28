@@ -236,11 +236,8 @@
       <div class="card-head"><h2 id="formTitle">Servicio</h2><div class="sub" id="recIdLabel">registro nuevo</div></div>
       <div class="card-pad">
         <div class="field">
-          <label>Categoría de equipo</label>
-          <div class="subchoice">
-            <button type="button" data-cat="portatil" id="catPortatil">Portátiles</button>
-            <button type="button" data-cat="estatico" id="catEstatico">Estáticos</button>
-          </div>
+          <label>Área</label>
+          <select id="f_area"></select>
         </div>
         <div class="field">
           <label>Equipo</label>
@@ -260,10 +257,7 @@
           <div class="field"><label>N° de Informe</label><input type="text" id="f_ninforme"></div>
           <div class="field"><label>Fecha</label><input type="date" id="f_fecha"></div>
         </div>
-        <div class="row2">
-          <div class="field"><label>Área Intervenida</label><select id="f_area"></select></div>
-          <div class="field"><label>Tipo de Servicio</label><input type="text" id="f_tiposervicio"></div>
-        </div>
+        <div class="field"><label>Tipo de Servicio</label><input type="text" id="f_tiposervicio"></div>
         <div class="row2">
           <div class="field"><label>Técnico(s) de Servicio</label><input type="text" id="f_tecnico"></div>
           <div class="field"><label>Supervisor</label><input type="text" id="f_supervisor"></div>
@@ -679,17 +673,32 @@ let repuestosRec = [];        // [{descripcion,parte,cantidad,obs}]
 let entregaState = {};        // { 0:true, 1:false, ... }
 let sigData = { sigTecnico:null, sigSupervisor:null };
 let histFilter = 'todos';
-let selectedChoiceCat = 'portatil';
 
 function itemKey(secKey, i){ return secKey + '-' + i; }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 function todayISO(){ return new Date().toISOString().slice(0,10); }
 function nowTimeHHMM(){ const d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
 
+const EQUIPOS_DEFAULT_VERSION = 2; // subir en 1 cada vez que EQUIPOS_DEFAULT cambie
+// IDs de la versión anterior (placeholder, con datos incompletos) que se reemplazan por los reales del archivo de control.
+const OBSOLETE_IDS_V2 = ['PORT-N3','PORT-N4','PORT-N5','PORT-N6','PORT-N7','EST-CSD105-1','EST-CSD105-2','EST-ASD40-1','EST-ASD40-2','EST-ASD40-3','EST-CSDX165'];
+
 async function loadEquipos(){
   const saved = await storage.get('equipos_master');
-  equipos = saved && saved.length ? saved : JSON.parse(JSON.stringify(EQUIPOS_DEFAULT));
-  if(!saved) await storage.set('equipos_master', equipos);
+  const savedVersion = (await storage.get('equipos_master_version')) || 0;
+  if(!saved || !saved.length){
+    equipos = JSON.parse(JSON.stringify(EQUIPOS_DEFAULT));
+  } else if(savedVersion < EQUIPOS_DEFAULT_VERSION){
+    // fusiona: saca placeholders obsoletos conocidos, conserva el resto (incl. equipos agregados a mano), suma los nuevos que falten
+    let base = saved.filter(e => !OBSOLETE_IDS_V2.includes(e.id));
+    const existingIds = new Set(base.map(e => e.id));
+    EQUIPOS_DEFAULT.forEach(def => { if(!existingIds.has(def.id)) base.push(JSON.parse(JSON.stringify(def))); });
+    equipos = base;
+  } else {
+    equipos = saved;
+  }
+  await storage.set('equipos_master', equipos);
+  await storage.set('equipos_master_version', EQUIPOS_DEFAULT_VERSION);
 }
 async function saveEquipos(){ await storage.set('equipos_master', equipos); }
 
@@ -718,18 +727,11 @@ function goToView(name){
 document.getElementById('choiceInspeccion').addEventListener('click', () => startNewForm('inspeccion'));
 document.getElementById('choiceMtto').addEventListener('click', () => startNewForm('mtto'));
 
-document.getElementById('catPortatil').addEventListener('click', () => { selectedChoiceCat='portatil'; syncCatButtons(); populateFormEquipoSelect(); });
-document.getElementById('catEstatico').addEventListener('click', () => { selectedChoiceCat='estatico'; syncCatButtons(); populateFormEquipoSelect(); });
-function syncCatButtons(){
-  document.getElementById('catPortatil').classList.toggle('sel', selectedChoiceCat==='portatil');
-  document.getElementById('catEstatico').classList.toggle('sel', selectedChoiceCat==='estatico');
-}
-
 function populateAreaSelectPlain(id){
   const sel = document.getElementById(id);
   sel.innerHTML = AREAS.map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join('');
 }
-function populateAreaSelect(selected){
+function populateFormAreaSelect(selected){
   const sel = document.getElementById('f_area');
   sel.innerHTML = `<option value="">Selecciona un área…</option>` + AREAS.map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join('');
   if(selected) sel.value = selected;
@@ -738,14 +740,27 @@ function populateFormIntervalo(){
   const sel = document.getElementById('f_intervalo');
   sel.innerHTML = INTERVALOS.map(i => `<option value="${esc(i)}">${esc(i)}</option>`).join('');
 }
+document.getElementById('f_area').addEventListener('change', () => {
+  populateFormEquipoSelect();
+});
 function populateFormEquipoSelect(){
   const sel = document.getElementById('f_equipo');
-  const list = equipos.filter(e => e.categoria === selectedChoiceCat);
-  sel.innerHTML = `<option value="">Selecciona un equipo…</option>` +
-    (list.map(e => `<option value="${esc(e.id)}">${esc(e.nombre)} — ${esc(e.marca)} ${esc(e.modelo)}${e.serie ? ' · '+esc(e.serie) : ''}</option>`).join('')
-    || '') ;
-  if(!list.length) sel.innerHTML = `<option value="">Sin equipos en esta categoría — agrégalos en "Equipos"</option>`;
-  applyEquipoToForm(null); // limpio hasta que se elija uno
+  const area = document.getElementById('f_area').value;
+  if(!area){
+    sel.innerHTML = `<option value="">Primero selecciona un área…</option>`;
+    applyEquipoToForm(null);
+    return;
+  }
+  const list = equipos.filter(e => e.area === area);
+  const estaticos = list.filter(e => e.categoria === 'estatico');
+  const portatiles = list.filter(e => e.categoria === 'portatil');
+  let html = `<option value="">Selecciona un equipo…</option>`;
+  const optHTML = e => `<option value="${esc(e.id)}">${esc(e.nombre)} — ${esc(e.marca)} ${esc(e.modelo)}${e.serie ? ' · '+esc(e.serie) : ''}</option>`;
+  if(estaticos.length) html += `<optgroup label="Estáticos">${estaticos.map(optHTML).join('')}</optgroup>`;
+  if(portatiles.length) html += `<optgroup label="Portátiles">${portatiles.map(optHTML).join('')}</optgroup>`;
+  if(!list.length) html = `<option value="">Sin equipos en esta área — agrégalos en "Equipos"</option>`;
+  sel.innerHTML = html;
+  applyEquipoToForm(null); // limpio hasta que se elija un equipo puntual
 }
 document.getElementById('f_equipo').addEventListener('change', (e) => {
   const equipo = equipos.find(eq => eq.id === e.target.value) || null;
@@ -757,7 +772,6 @@ function applyEquipoToForm(equipo){
   document.getElementById('f_serie').value = equipo ? equipo.serie : '';
   document.getElementById('f_interno').value = equipo ? (equipo.interno || equipo.nombre) : '';
   document.getElementById('f_ubicacion').value = equipo ? equipo.ubicacion : '';
-  if(equipo) populateAreaSelect(equipo.area);
 }
 
 document.getElementById('f_intervalo').addEventListener('change', (e) => {
@@ -799,17 +813,15 @@ function startNewForm(servicio){
   repuestosRec = [];
   entregaState = {};
   sigData = { sigTecnico:null, sigSupervisor:null };
-  selectedChoiceCat = 'portatil';
 
   document.getElementById('formTitle').textContent = servicio === 'inspeccion' ? 'Inspección' : 'Mantención';
   document.getElementById('recIdLabel').textContent = 'registro nuevo';
   document.getElementById('btnDelete').style.display = 'none';
   document.getElementById('f_intervaloWrap').style.display = servicio === 'mtto' ? 'block' : 'none';
 
-  syncCatButtons();
+  populateFormAreaSelect();
   populateFormEquipoSelect();
   populateFormIntervalo();
-  populateAreaSelect();
 
   document.getElementById('f_ninforme').value = '';
   document.getElementById('f_fecha').value = todayISO();
@@ -1059,11 +1071,12 @@ setupSignature('sigTecnico'); setupSignature('sigSupervisor');
    GUARDAR / CARGAR / ELIMINAR
    ============================================================ */
 function buildRecord(){
+  const equipoSel = equipos.find(e => e.id === document.getElementById('f_equipo').value);
   return {
     id: currentId || ('reg_' + Date.now()),
     servicio: currentServicio,
     savedAt: new Date().toISOString(),
-    categoria: selectedChoiceCat,
+    categoria: equipoSel ? equipoSel.categoria : '',
     equipoId: document.getElementById('f_equipo').value,
     intervalo: currentServicio === 'mtto' ? document.getElementById('f_intervalo').value : '',
     ninforme: document.getElementById('f_ninforme').value,
@@ -1154,13 +1167,11 @@ async function loadRecordIntoForm(id){
   document.getElementById('btnDelete').style.display = 'block';
   document.getElementById('f_intervaloWrap').style.display = rec.servicio === 'mtto' ? 'block' : 'none';
 
-  selectedChoiceCat = rec.categoria || 'portatil';
-  syncCatButtons();
+  populateFormAreaSelect(rec.area);
   populateFormEquipoSelect();
   if(rec.equipoId) document.getElementById('f_equipo').value = rec.equipoId;
   populateFormIntervalo();
   if(rec.intervalo) document.getElementById('f_intervalo').value = rec.intervalo;
-  populateAreaSelect(rec.area);
 
   document.getElementById('f_ninforme').value = rec.ninforme || '';
   document.getElementById('f_fecha').value = rec.fecha || '';
