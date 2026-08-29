@@ -887,11 +887,14 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
   <!-- ======================= EQUIPOS (maestro editable) ======================= -->
   <section class="view" id="view-equip">
     <div class="card">
-      <div class="card-head"><h2>Maestro de equipos</h2></div>
+      <div class="card-head" style="display:flex;justify-content:space-between;align-items:center;">
+        <h2>Maestro de equipos</h2>
+        <button id="btnCambiarClaveEquipos" style="background:none;border:none;color:#8fa8c2;font-size:11px;">🔒 Cambiar clave</button>
+      </div>
       <div id="equipList"></div>
     </div>
     <div class="card">
-      <div class="card-head"><h2>Agregar equipo</h2></div>
+      <div class="card-head"><h2 id="addEquipoCardTitle">Agregar equipo</h2></div>
       <div class="card-pad">
         <div class="field">
           <label>Categoría</label>
@@ -914,6 +917,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         </div>
         <div class="field"><label>Ubicación física</label><input type="text" id="eUbicacion" placeholder="Ej: Sala compresor"></div>
         <button class="btn-full" style="background:var(--steel);color:#fff;" id="addEquipoBtn">Agregar equipo</button>
+        <button class="btn-full" style="background:#fff;color:var(--muted);border:1.5px solid var(--line);margin-top:8px;display:none;" id="btnCancelarEdicionEquipo">Cancelar edición</button>
       </div>
     </div>
 
@@ -1350,11 +1354,14 @@ const MAINTENANCE_PARTS = {
   },
   'M50': {
     modo: 'CUMULATIVE',
-    dataStatus: 'COMPLETE',
+    dataStatus: 'PARTIAL',
     tiers: [250, 500, 1000],
     tieneCondicion: false,
     items: [
-      { tier: 250, componente: 'Juego Filtros 250 Hr', numeroParte: '5913750', codigoSap: '11102625', cantidad: 1, unidad: 'JGO', validacion: 'CONFIRMADO', nota: 'Cambio programado' },
+      { tier: 250, componente: 'Filtro de aceite del motor', numeroParte: '1C020-32430', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Cambio programado | PN Kubota (bloque V1505) — puede ser W21ESO1C00 según año exacto del bloque motor. Reemplaza al kit combinado 5913750, confirmado por Mario (29-08-2026)' },
+      { tier: 250, componente: 'Filtro de combustible primario / separador de agua', numeroParte: 'R25T', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Cambio programado | Parker Racor R25T o equivalencia directa KAESER, confirmado por Mario (29-08-2026)' },
+      { tier: 250, componente: 'Filtro de combustible en línea (secundario)', numeroParte: null, codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'PENDIENTE_PN', nota: 'Cambio programado | Depende del esquema de mangueras de alimentación del motor — confirmar N° de parte en terreno según instalación real' },
+      { tier: 250, componente: 'Filtro de aire del compresor/motor (elemento principal)', numeroParte: '6.3540.0', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Cambio programado | Confirmado por Mario (29-08-2026), reemplaza al kit combinado 5913750' },
       { tier: 250, componente: 'Aceite motor diésel 15W40', numeroParte: '15W40', codigoSap: null, cantidad: 6.5, unidad: 'L aprox.', validacion: 'CONFIRMADO', nota: 'Cantidad indicada 6–7 L aprox.; especificación según proveedor Kubota' },
       { tier: 500, componente: 'Filtro de aire principal', numeroParte: '6.2185.0', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Dato agregado por usuario; sin SAP en captura' },
       { tier: 1000, componente: 'Filtro de aceite unidad compresora', numeroParte: '6.1985.0', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Versión indicada: 6.1985.0; texto menciona alternativa 6.1985.1' },
@@ -1822,7 +1829,25 @@ document.querySelectorAll('.tab').forEach(tab => {
 });
 document.getElementById('goHome').addEventListener('click', () => goToView('home'));
 
-function goToView(name){
+let equiposUnlocked = false;
+async function verificarClaveEquipos(){
+  if(equiposUnlocked) return true;
+  const pinGuardado = await storage.get('equipos_pin');
+  if(!pinGuardado){
+    const nueva = prompt('Aún no hay una clave configurada para esta sección.\nCrea una clave para proteger el maestro de equipos (técnicos, supervisores, altas/bajas):');
+    if(!nueva || !nueva.trim()) return false;
+    await storage.set('equipos_pin', nueva.trim());
+    equiposUnlocked = true;
+    toast('✓ Clave creada — guárdala en un lugar seguro');
+    return true;
+  }
+  const intento = prompt('Ingresa la clave para acceder a Equipos:');
+  if(intento === pinGuardado){ equiposUnlocked = true; return true; }
+  if(intento !== null) toast('✕ Clave incorrecta');
+  return false;
+}
+async function goToView(name){
+  if(name === 'equip' && !(await verificarClaveEquipos())) return; // clave incorrecta o cancelada -> no navega
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-' + name).classList.add('active');
@@ -3125,6 +3150,7 @@ function syncNewCatButtons(){
   document.getElementById('newCatEstatico').classList.toggle('sel', newEquipCat==='estatico');
 }
 
+let editingEquipoId = null;
 function renderEquipList(){
   const box = document.getElementById('equipList');
   if(!equipos.length){ box.innerHTML = `<div class="card-pad empty-state">Sin equipos registrados.</div>`; return; }
@@ -3134,7 +3160,7 @@ function renderEquipList(){
     if(!grupos[cat].length) return;
     html += `<div class="section-bar" style="margin:0;">${label}</div>`;
     grupos[cat].forEach(e => {
-      html += `<div class="hist-item" style="cursor:default;">
+      html += `<div class="hist-item" data-editeq-open="${esc(e.id)}">
         <div class="hist-main">
           <div class="t1">${esc(e.nombre)}</div>
           <div class="t2">${esc(e.marca)} ${esc(e.modelo)} · ${esc(e.serie||'sin serie')} · ${esc(e.area||'')}</div>
@@ -3144,13 +3170,41 @@ function renderEquipList(){
     });
   });
   box.innerHTML = html;
-  box.querySelectorAll('[data-rmeq]').forEach(btn => btn.addEventListener('click', async () => {
+  box.querySelectorAll('[data-editeq-open]').forEach(row => row.addEventListener('click', () => startEditEquipo(row.dataset.editeqOpen)));
+  box.querySelectorAll('[data-rmeq]').forEach(btn => btn.addEventListener('click', async (e) => {
+    e.stopPropagation();
     if(confirm('¿Eliminar este equipo del maestro?')){
       equipos = equipos.filter(e => e.id !== btn.dataset.rmeq);
       await saveEquipos();
       renderEquipList();
     }
   }));
+}
+function startEditEquipo(id){
+  const e = equipos.find(x => x.id === id);
+  if(!e) return;
+  editingEquipoId = id;
+  newEquipCat = e.categoria === 'estatico' ? 'estatico' : 'portatil';
+  syncNewCatButtons();
+  document.getElementById('eNombre').value = e.nombre || '';
+  document.getElementById('eMarca').value = e.marca || '';
+  document.getElementById('eModelo').value = e.modelo || '';
+  document.getElementById('eSerie').value = e.serie || '';
+  document.getElementById('eInterno').value = e.interno || '';
+  document.getElementById('eArea').value = e.area || '';
+  document.getElementById('eUbicacion').value = e.ubicacion || '';
+  document.getElementById('addEquipoCardTitle').textContent = 'Editando: ' + e.nombre;
+  document.getElementById('addEquipoBtn').textContent = 'Guardar cambios';
+  document.getElementById('btnCancelarEdicionEquipo').style.display = 'block';
+  document.getElementById('addEquipoBtn').scrollIntoView({ behavior:'smooth', block:'center' });
+}
+function cancelarEdicionEquipo(){
+  editingEquipoId = null;
+  ['eNombre','eMarca','eModelo','eSerie','eInterno','eUbicacion'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('eArea').value = '';
+  document.getElementById('addEquipoCardTitle').textContent = 'Agregar equipo';
+  document.getElementById('addEquipoBtn').textContent = 'Agregar equipo';
+  document.getElementById('btnCancelarEdicionEquipo').style.display = 'none';
 }
 document.getElementById('addEquipoBtn').addEventListener('click', async () => {
   const nombre = document.getElementById('eNombre').value.trim();
@@ -3161,6 +3215,19 @@ document.getElementById('addEquipoBtn').addEventListener('click', async () => {
   const area = document.getElementById('eArea').value;
   const ubicacion = document.getElementById('eUbicacion').value.trim();
   if(!nombre || !marca){ toast('Completa al menos Nombre y Marca'); return; }
+
+  if(editingEquipoId){
+    const e = equipos.find(x => x.id === editingEquipoId);
+    if(e){
+      Object.assign(e, { categoria: newEquipCat, nombre, marca, modelo, serie, interno, area, ubicacion });
+      await saveEquipos();
+      toast('✓ Equipo actualizado — se aplica desde ahora en adelante');
+      cancelarEdicionEquipo();
+      renderEquipList();
+    }
+    return;
+  }
+
   equipos.push({ id: 'EQ-' + Date.now(), categoria: newEquipCat, nombre, marca, modelo, serie, interno, area, ubicacion });
   await saveEquipos();
   document.getElementById('eNombre').value=''; document.getElementById('eMarca').value='';
@@ -3168,6 +3235,18 @@ document.getElementById('addEquipoBtn').addEventListener('click', async () => {
   document.getElementById('eInterno').value=''; document.getElementById('eUbicacion').value='';
   toast('✓ Equipo agregado');
   renderEquipList();
+});
+document.getElementById('btnCancelarEdicionEquipo').addEventListener('click', cancelarEdicionEquipo);
+document.getElementById('btnCambiarClaveEquipos').addEventListener('click', async () => {
+  const actual = await storage.get('equipos_pin');
+  if(actual){
+    const verificacion = prompt('Ingresa la clave actual para poder cambiarla:');
+    if(verificacion !== actual){ if(verificacion !== null) toast('✕ Clave incorrecta'); return; }
+  }
+  const nueva = prompt('Escribe la nueva clave:');
+  if(!nueva || !nueva.trim()){ toast('Cambio cancelado'); return; }
+  await storage.set('equipos_pin', nueva.trim());
+  toast('✓ Clave actualizada');
 });
 
 function renderPersonList(containerId, list, onRemove){
@@ -3729,7 +3808,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v30'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v32'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
