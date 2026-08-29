@@ -2873,7 +2873,7 @@ document.getElementById('btnSyncSave').addEventListener('click', async () => {
   await setSyncConfig({ url, appKey });
   toast('Probando conexión…');
   try{
-    const resp = await fetch(url + '?action=ping');
+    const resp = await fetch(url + '?action=ping&_=' + Date.now(), { cache: 'no-store' });
     const data = await resp.json();
     if(data && data.ok){ toast('✓ Conexión exitosa'); } else { toast('⚠ Guardado, pero el servidor respondió con error'); }
   }catch(e){ toast('⚠ Guardado, pero no se pudo probar la conexión (revisa la URL o el internet)'); }
@@ -2892,8 +2892,10 @@ async function fetchRemoteList(){
   if(!cfg || !cfg.url || !cfg.appKey) return { ok:false, reason:'no_config' };
   if(!navigator.onLine) return { ok:false, reason:'offline' };
   try{
-    const url = cfg.url + '?action=listar&key=' + encodeURIComponent(cfg.appKey) + '&limit=300';
-    const resp = await fetch(url);
+    // cache:'no-store' + parámetro _ único -> evita que Safari devuelva una respuesta
+    // guardada de una consulta anterior a esta misma URL (causaba ver registros "viejos")
+    const url = cfg.url + '?action=listar&key=' + encodeURIComponent(cfg.appKey) + '&limit=300&_=' + Date.now();
+    const resp = await fetch(url, { cache: 'no-store' });
     const data = await resp.json();
     if(!data || !data.ok) return { ok:false, reason: (data && data.error) || 'error_servidor' };
     await storage.set('remote_index', { registros: data.registros || [], fetchedAt: new Date().toISOString() });
@@ -2943,8 +2945,8 @@ async function openRemoteDetail(id){
   body.innerHTML = 'Cargando…';
   document.getElementById('remoteModal').classList.add('show');
   try{
-    const url = cfg.url + '?action=obtener&key=' + encodeURIComponent(cfg.appKey) + '&id=' + encodeURIComponent(id);
-    const resp = await fetch(url);
+    const url = cfg.url + '?action=obtener&key=' + encodeURIComponent(cfg.appKey) + '&id=' + encodeURIComponent(id) + '&_=' + Date.now();
+    const resp = await fetch(url, { cache: 'no-store' });
     const data = await resp.json();
     if(!data || !data.ok || !data.registro){ body.innerHTML = 'No se pudo cargar el registro.'; return; }
     const r = data.registro;
@@ -3727,7 +3729,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v29'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v30'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
