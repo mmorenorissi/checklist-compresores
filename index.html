@@ -1062,13 +1062,18 @@ const REFERENCIA_MTTO = {
   }
 };
 
-const MAINTENANCE_PARTS_VERSION = '2026-08-29-v1';
+const MAINTENANCE_PARTS_VERSION = '2026-08-29-v2';
 
 // Datos reales de repuestos por equipo/frecuencia, entregados por el usuario
 // (14 planillas 'Repuestos_Frecuencias_Confirmados'). No se inventa ningún PN:
 // donde no vino confirmado, numeroParte queda en null y se marca 'PENDIENTE_PN'.
+//
+// modo: 'CUMULATIVE' -> cada tramo lista SOLO lo que se agrega (la mayoría de equipos).
+//       'EXACT'      -> el tramo ya viene con la lista COMPLETA de ese nivel (ASD-40,
+//                       CSDX165, GA250) — filtrar por tier<=intervalo aquí duplicaría.
 const MAINTENANCE_PARTS = {
   'GA15+': {
+    modo: 'CUMULATIVE',
     dataStatus: 'COMPLETE',
     tiers: [2000, 4000, 8000],
     tieneCondicion: true,
@@ -1084,7 +1089,8 @@ const MAINTENANCE_PARTS = {
     ]
   },
   'GA160': {
-    dataStatus: 'COMPLETE',
+    modo: 'CUMULATIVE',
+    dataStatus: 'PARTIAL',
     tiers: [4000, 8000, 16000],
     tieneCondicion: false,
     items: [
@@ -1099,6 +1105,7 @@ const MAINTENANCE_PARTS = {
     ]
   },
   'GA250': {
+    modo: 'EXACT',
     dataStatus: 'COMPLETE',
     tiers: [2000, 4000, 8000],
     tieneCondicion: true,
@@ -1116,6 +1123,7 @@ const MAINTENANCE_PARTS = {
     ]
   },
   'GA55': {
+    modo: 'CUMULATIVE',
     dataStatus: 'COMPLETE',
     tiers: [2000, 4000, 8000],
     tieneCondicion: true,
@@ -1135,6 +1143,7 @@ const MAINTENANCE_PARTS = {
     ]
   },
   'GA75': {
+    modo: 'CUMULATIVE',
     dataStatus: 'COMPLETE',
     tiers: [2000, 4000, 8000],
     tieneCondicion: true,
@@ -1154,24 +1163,25 @@ const MAINTENANCE_PARTS = {
     ]
   },
   'U-190': {
-    dataStatus: 'SIN_FRECUENCIA',
-    tiers: [],
+    modo: 'CUMULATIVE',
+    dataStatus: 'COMPLETE',
+    tiers: [250, 500, 1000],
     tieneCondicion: false,
     items: [
-      { tier: null, componente: 'Filtro de aceite unidad', numeroParte: '1625752501', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: '' },
-      { tier: null, componente: 'Filtro de aire primario', numeroParte: '2914930400', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: '' },
-      { tier: null, componente: 'Filtro de aire secundario', numeroParte: '2914930500', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: '' },
-      { tier: null, componente: 'Filtro separador', numeroParte: '1626832100', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: '' },
-      { tier: null, componente: 'Aceite lubricador', numeroParte: 'PAROIL S', codigoSap: null, cantidad: 10, unidad: 'L aprox.', validacion: 'CONFIRMADO', nota: '' },
-      { tier: null, componente: 'FW Separador', numeroParte: '1092837400', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: '' },
-      { tier: null, componente: 'Aceite lubricador', numeroParte: 'PAROIL E', codigoSap: null, cantidad: 10, unidad: 'L aprox.', validacion: 'CONFIRMADO', nota: '' },
-      { tier: null, componente: 'Filtro de aceite', numeroParte: '2913311200', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: '' },
-      { tier: null, componente: 'Filtro de aceite combustible', numeroParte: '1092638700', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: '' },
-      { tier: null, componente: 'Filtro de aire de motor primario', numeroParte: '2914930200', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: '' },
-      { tier: null, componente: null, numeroParte: null, codigoSap: null, cantidad: null, unidad: null, validacion: 'PENDIENTE_PN', nota: '' },
+      { tier: 250, componente: 'Aceite lubricante del Motor', numeroParte: 'PAROIL E', codigoSap: null, cantidad: 10, unidad: 'L aprox.', validacion: 'CONFIRMADO', nota: 'Cambio programado' },
+      { tier: 250, componente: 'Filtro de aceite del Motor', numeroParte: '2913311200', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Cambio programado' },
+      { tier: 250, componente: 'Filtro de aceite combustible', numeroParte: '1092638700', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Cambio programado' },
+      { tier: 250, componente: 'FW Separador / filtro separador de agua', numeroParte: '1092837400', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Cambio programado' },
+      { tier: 500, componente: 'Filtro de aire de motor primario', numeroParte: '2914930200', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Cambio programado' },
+      { tier: 500, componente: 'Filtro de aire primario', numeroParte: '2914930400', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Cambio programado' },
+      { tier: 500, componente: 'Filtro de aire secundario / seguridad', numeroParte: '2914930500', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Cambio programado' },
+      { tier: 1000, componente: 'Aceite lubricante de la Unidad', numeroParte: 'PAROIL S', codigoSap: null, cantidad: 10, unidad: 'L aprox.', validacion: 'CONFIRMADO', nota: 'Cambio programado' },
+      { tier: 1000, componente: 'Filtro de aceite unidad', numeroParte: '1625752501', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Cambio programado' },
+      { tier: 1000, componente: 'Filtro separador', numeroParte: '1626832100', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Cambio programado' },
     ]
   },
   'XAS-400': {
+    modo: 'CUMULATIVE',
     dataStatus: 'COMPLETE',
     tiers: [250, 500, 1000],
     tieneCondicion: false,
@@ -1192,6 +1202,7 @@ const MAINTENANCE_PARTS = {
     ]
   },
   'XAS-97': {
+    modo: 'CUMULATIVE',
     dataStatus: 'COMPLETE',
     tiers: [250, 500, 1000],
     tieneCondicion: false,
@@ -1210,6 +1221,7 @@ const MAINTENANCE_PARTS = {
     ]
   },
   'XAS98': {
+    modo: 'CUMULATIVE',
     dataStatus: 'COMPLETE',
     tiers: [250, 500, 1000],
     tieneCondicion: false,
@@ -1228,24 +1240,26 @@ const MAINTENANCE_PARTS = {
     ]
   },
   'MM75': {
+    modo: 'CUMULATIVE',
     dataStatus: 'COMPLETE',
     tiers: [2000, 4000, 8000],
-    tieneCondicion: false,
+    tieneCondicion: true,
     items: [
       { tier: 2000, componente: 'Filtro de aceite / Coolant Filter', numeroParte: '39911631', codigoSap: '11159113', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Cambio programado' },
       { tier: 2000, componente: 'Filtro Panel Sala', numeroParte: '381890721', codigoSap: '11166722', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Inspección / reemplazo según polvo ambiental' },
       { tier: 4000, componente: 'Filtro de aire compresor', numeroParte: '39708466', codigoSap: '11159114', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Cambio programado / bajo indicador de restricción' },
       { tier: 8000, componente: 'Filtro separador aire/aceite', numeroParte: '54601513', codigoSap: '11159112', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Cambio programado mayor' },
       { tier: 8000, componente: 'Ultra Coolant 20 L', numeroParte: '38459582', codigoSap: '11087258', cantidad: 1, unidad: 'BIDÓN 20 L', validacion: 'CONFIRMADO', nota: 'Cambio total de fluido' },
-      { tier: 8000, componente: 'Juego reparación IR', numeroParte: '99289852', codigoSap: '11159016', cantidad: 1, unidad: 'KIT', validacion: 'CONFIRMADO', nota: 'Inspección / instalar según desgaste mecánico' },
-      { tier: 8000, componente: 'Válvula termostática', numeroParte: '23137920', codigoSap: '11183499', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Inspección / reemplazo según condición' },
-      { tier: 8000, componente: 'Válvula mínima presión / check', numeroParte: '99289845', codigoSap: '11179183', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Inspección / reemplazo según condición' },
-      { tier: 8000, componente: 'Válvula solenoide 1/2 IN NPT 110V', numeroParte: '54654652', codigoSap: '11179184', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Inspección / reemplazo según condición' },
-      { tier: 8000, componente: 'Válvula solenoide 2-way NC', numeroParte: '22205462', codigoSap: '11179185', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Inspección / reemplazo según condición' },
-      { tier: 8000, componente: 'Relay Over Load', numeroParte: '644R0106', codigoSap: '11186961', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Inspección / reemplazo según condición eléctrica' },
+      { tier: 'CONDICION', componente: 'Juego reparación IR', numeroParte: '99289852', codigoSap: '11159016', cantidad: 1, unidad: 'KIT', validacion: 'CONFIRMADO', nota: 'Inspección / instalar según desgaste mecánico' },
+      { tier: 'CONDICION', componente: 'Válvula termostática', numeroParte: '23137920', codigoSap: '11183499', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Inspección / reemplazo según condición' },
+      { tier: 'CONDICION', componente: 'Válvula mínima presión / check', numeroParte: '99289845', codigoSap: '11179183', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Inspección / reemplazo según condición' },
+      { tier: 'CONDICION', componente: 'Válvula solenoide 1/2 IN NPT 110V', numeroParte: '54654652', codigoSap: '11179184', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Inspección / reemplazo según condición' },
+      { tier: 'CONDICION', componente: 'Válvula solenoide 2-way NC', numeroParte: '22205462', codigoSap: '11179185', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Inspección / reemplazo según condición' },
+      { tier: 'CONDICION', componente: 'Relay Over Load', numeroParte: '644R0106', codigoSap: '11186961', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Inspección / reemplazo según condición eléctrica' },
     ]
   },
   'ASD-40': {
+    modo: 'EXACT',
     dataStatus: 'COMPLETE',
     tiers: [2000, 4000, 6000, 8000, 10000, 12000],
     tieneCondicion: false,
@@ -1295,6 +1309,7 @@ const MAINTENANCE_PARTS = {
     ]
   },
   'CSD-105': {
+    modo: 'CUMULATIVE',
     dataStatus: 'COMPLETE',
     tiers: [2000, 4000, 8000],
     tieneCondicion: false,
@@ -1316,6 +1331,7 @@ const MAINTENANCE_PARTS = {
     ]
   },
   'CSDX165': {
+    modo: 'EXACT',
     dataStatus: 'COMPLETE',
     tiers: [2000, 4000, 8000],
     tieneCondicion: false,
@@ -1335,6 +1351,7 @@ const MAINTENANCE_PARTS = {
     ]
   },
   'M50': {
+    modo: 'CUMULATIVE',
     dataStatus: 'COMPLETE',
     tiers: [250, 500, 1000],
     tieneCondicion: false,
@@ -1374,9 +1391,19 @@ function getPlannedMaintenance(equipo, intervaloNum){
   if(model.dataStatus === 'SIN_FRECUENCIA'){
     return { status: 'SIN_FRECUENCIA', dataStatus: model.dataStatus, items: model.items };
   }
-  const items = model.items.filter(it =>
-    it.tier === 'CONDICION' || (typeof it.tier === 'number' && intervaloNum != null && it.tier <= intervaloNum)
-  );
+  let items;
+  if(model.modo === 'EXACT'){
+    // el tramo ya trae la lista COMPLETA de ese nivel (no hay que sumar tramos anteriores)
+    let tierObjetivo = intervaloNum;
+    if(tierObjetivo === Infinity || tierObjetivo == null){
+      tierObjetivo = (model.tiers && model.tiers.length) ? model.tiers[model.tiers.length-1] : null; // "Otro" -> usar el nivel mayor conocido
+    }
+    items = model.items.filter(it => it.tier === 'CONDICION' || it.tier === tierObjetivo);
+  } else {
+    items = model.items.filter(it =>
+      it.tier === 'CONDICION' || (typeof it.tier === 'number' && intervaloNum != null && it.tier <= intervaloNum)
+    );
+  }
   return { status: 'OK', dataStatus: model.dataStatus, items };
 }
 function activityId(equipo, item, idx){
@@ -1962,8 +1989,10 @@ function renderPlannedMaintenance(equipo, snapshotOverride){
   }
   box.style.display = 'block';
 
-  const condicion = res.items.filter(it => it.tier === 'CONDICION');
   const porHora = res.items.filter(it => it.tier !== 'CONDICION');
+  const porHoraKeys = new Set(porHora.map(it => (it.componente||'') + '|' + (it.numeroParte||'')));
+  // si el mismo repuesto (componente+PN) ya aparece en un tramo por hora, no repetirlo también en "por condición"
+  const condicion = res.items.filter(it => it.tier === 'CONDICION' && !porHoraKeys.has((it.componente||'') + '|' + (it.numeroParte||'')));
   const badge = DATA_STATUS_BADGE[res.dataStatus] || DATA_STATUS_BADGE.PARTIAL;
 
   function itemHTML(item, idx){
@@ -2430,9 +2459,13 @@ function openPhotoModal(src){ document.getElementById('photoModalImg').src = src
 document.getElementById('photoModal').addEventListener('click', () => document.getElementById('photoModal').classList.remove('show'));
 
 function computeEquipoEstado(items){
-  const malos = Object.values(items).filter(s => s.status === 'malo');
+  const valores = Object.values(items);
+  const malos = valores.filter(s => s.status === 'malo');
+  const regulares = valores.filter(s => s.status === 'regular');
+  const pendientes = valores.filter(s => !s.status);
   if(malos.some(s => s.criticidad === 'critica' || s.criticidad === 'alta')) return { label:'NO OPERATIVO', cls:'malo' };
-  if(malos.length) return { label:'OPERATIVO CON OBSERVACIONES', cls:'regular' };
+  if(malos.length || regulares.length) return { label:'OPERATIVO CON OBSERVACIONES', cls:'regular' };
+  if(pendientes.length) return { label:'CHECKLIST INCOMPLETO', cls:'regular' };
   return { label:'OPERATIVO', cls:'bueno' };
 }
 
@@ -2585,6 +2618,13 @@ function buildPlannedSnapshot(equipoSel){
     items: res.items // copia congelada de los ítems mostrados en este registro
   };
 }
+function buildItemsDescriptivos(){
+  const mapa = {};
+  itemsForServicio(currentServicio).forEach(sec => {
+    sec.items.forEach((texto, i) => { mapa[itemKey(sec.key, i)] = { seccion: sec.title, texto }; });
+  });
+  return mapa;
+}
 function buildRecord(){
   const equipoSel = equipos.find(e => e.id === document.getElementById('f_equipo').value);
   return {
@@ -2610,6 +2650,7 @@ function buildRecord(){
     horometro: document.getElementById('f_horometro').value,
     horometroJustificacion: document.getElementById('f_horometroJust').value,
     items: itemState,
+    itemsDescriptivos: buildItemsDescriptivos(),
     photos: photoState,
     repuestosUsados, repuestosRec,
     plannedState,
@@ -2637,6 +2678,11 @@ function itemsSinEvidencia(){
   );
 }
 async function saveRecord(){
+  const pendientes = Object.values(itemState).filter(s => !s.status).length;
+  if(pendientes){
+    toast(`✕ Quedan ${pendientes} ítem(s) sin evaluar. Márcalos (aunque sea N/A) antes de guardar. El borrador automático sigue guardando tu avance mientras tanto.`);
+    return false;
+  }
   const sinEvidencia = itemsSinEvidencia();
   if(sinEvidencia.length){
     toast(`✕ Hay ${sinEvidencia.length} ítem(s) MALO sin foto ni justificación. Completa uno de los dos para guardar.`);
@@ -2658,10 +2704,11 @@ async function saveRecord(){
   try{
     await storage.set('registro:' + rec.id, rec);
     await updateIndex(rec);
-    // actualizar último horómetro del equipo para futuras validaciones
+    // actualizar último horómetro del equipo para futuras validaciones — nunca hacia abajo,
+    // aunque se reabra y regrabe un informe antiguo con un valor menor (ya justificado).
     const equipo = equipos.find(e => e.id === equipoId);
     const horVal = parseFloat(document.getElementById('f_horometro').value);
-    if(equipo && !isNaN(horVal)){
+    if(equipo && !isNaN(horVal) && (equipo.ultimoHorometro == null || horVal > equipo.ultimoHorometro)){
       equipo.ultimoHorometro = horVal;
       equipo.ultimaFecha = rec.fecha;
       await saveEquipos();
@@ -2900,12 +2947,14 @@ async function openRemoteDetail(id){
         <b style="color:var(--steel);">Estado: ${esc(r.estado||'—')}</b>
       </div>`;
     if(full && full.items){
-      const evaluados = Object.values(full.items).filter(s => s.status === 'bueno' || s.status === 'regular' || s.status === 'malo');
-      if(evaluados.length){
-        html += `<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px;">Ítems evaluados (${evaluados.length})</div>`;
-        evaluados.forEach(s => {
+      const desc = full.itemsDescriptivos || {};
+      const evaluadosEntries = Object.entries(full.items).filter(([k,s]) => s.status === 'bueno' || s.status === 'regular' || s.status === 'malo');
+      if(evaluadosEntries.length){
+        html += `<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px;">Ítems evaluados (${evaluadosEntries.length})</div>`;
+        evaluadosEntries.forEach(([key, s]) => {
           const c = s.status==='malo' ? 'var(--malo)' : s.status==='regular' ? 'var(--regular)' : 'var(--bueno)';
-          html += `<div style="padding:7px 0;border-top:1px solid var(--line);"><b style="color:${c};">[${s.status.toUpperCase()}]</b> ${esc(s.obs||'')}</div>`;
+          const texto = desc[key] ? desc[key].texto : key;
+          html += `<div style="padding:7px 0;border-top:1px solid var(--line);"><b style="color:${c};">[${s.status.toUpperCase()}]</b> ${esc(texto)}${s.obs ? '<br><span style="color:var(--muted);">'+esc(s.obs)+'</span>' : ''}</div>`;
         });
       }
       if(full.hallazgos) html += `<div style="margin-top:10px;padding:8px 10px;background:var(--paper);border-radius:8px;"><b>Hallazgos:</b> ${esc(full.hallazgos)}</div>`;
@@ -3645,7 +3694,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v22'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v23'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
