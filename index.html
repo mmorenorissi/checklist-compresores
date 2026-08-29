@@ -238,6 +238,8 @@
       <p>Selecciona el tipo de servicio para comenzar</p>
     </div>
 
+    <div id="draftBanner" style="display:none;margin-bottom:12px;background:var(--regular-bg);border:1.5px solid var(--regular);border-radius:10px;padding:12px 14px;"></div>
+
     <div class="choice-grid">
       <div class="choice-card" id="choiceInspeccion" data-servicio="inspeccion">
         <div class="icon">🔍</div>
@@ -1736,6 +1738,7 @@ function getTecnicosValue(){
 
 function renderHome(){
   renderHomeRecent();
+  renderDraftBanner();
 }
 async function renderHomeRecent(){
   const box = document.getElementById('homeRecent');
@@ -1744,6 +1747,104 @@ async function renderHomeRecent(){
   if(!idx.length){ box.innerHTML = `<div class="card-pad empty-state" style="padding:24px 14px;">Aún no hay registros. Elige Inspección o Mantención para comenzar.</div>`; return; }
   box.innerHTML = idx.map(r => historyRowHTML(r)).join('');
   box.querySelectorAll('[data-open]').forEach(el => el.addEventListener('click', () => loadRecordIntoForm(el.dataset.open)));
+}
+
+/* ============================================================
+   BORRADOR AUTOMÁTICO — si sales de la app sin guardar (se cierra,
+   se queda sin batería, etc.), lo que llevabas relleno no se pierde.
+   Se guarda solo (sin las validaciones estrictas del Guardar real) cada
+   20s mientras estás en el formulario, y también si la app pasa a
+   segundo plano. Se borra automáticamente al guardar de verdad.
+   ============================================================ */
+const DRAFT_KEY = 'draft_actual';
+let draftInterval = null;
+
+async function autosaveDraft(){
+  if(!document.getElementById('view-form').classList.contains('active')) return;
+  if(!currentServicio) return;
+  try{
+    const rec = buildRecord();
+    rec.esBorrador = true;
+    rec.draftSavedAt = new Date().toISOString();
+    await storage.set(DRAFT_KEY, rec);
+  }catch(e){ /* silencioso: el borrador es una red de seguridad, no debe interrumpir */ }
+}
+async function clearDraft(){ try{ await storage.delete(DRAFT_KEY); }catch(e){} }
+
+document.addEventListener('visibilitychange', () => { if(document.hidden) autosaveDraft(); });
+draftInterval = setInterval(autosaveDraft, 20000);
+
+async function renderDraftBanner(){
+  const box = document.getElementById('draftBanner');
+  let draft = null;
+  try{ draft = await storage.get(DRAFT_KEY); }catch(e){}
+  if(!draft){ box.style.display = 'none'; return; }
+  const equipo = equipos.find(e => e.id === draft.equipoId);
+  const servicioLabel = draft.servicio === 'inspeccion' ? 'Inspección' : 'Mantención';
+  const fecha = draft.draftSavedAt ? new Date(draft.draftSavedAt).toLocaleString('es-CL') : '';
+  box.style.display = 'block';
+  box.innerHTML = `
+    <b style="color:var(--regular);">⏸ Tienes un checklist sin guardar</b><br>
+    <span style="font-size:12.5px;color:var(--muted);">${esc(servicioLabel)} · ${esc(equipo ? equipo.nombre : 'Equipo sin elegir')} · guardado automático: ${esc(fecha)}</span>
+    <div style="display:flex;gap:8px;margin-top:9px;">
+      <button id="btnResumeDraft" class="btn-full" style="background:var(--ink);color:#fff;padding:10px;">Continuar</button>
+      <button id="btnDiscardDraft" class="btn-full" style="background:#fff;color:var(--malo);border:1.5px solid var(--malo-bg);padding:10px;">Descartar</button>
+    </div>`;
+  document.getElementById('btnResumeDraft').addEventListener('click', () => resumeDraft(draft));
+  document.getElementById('btnDiscardDraft').addEventListener('click', async () => {
+    if(confirm('¿Descartar el checklist sin guardar? No se puede deshacer.')){
+      await clearDraft();
+      renderDraftBanner();
+      toast('Borrador descartado');
+    }
+  });
+}
+
+async function resumeDraft(draft){
+  currentId = draft.esBorrador ? null : draft.id; // el borrador se guarda como registro nuevo
+  currentServicio = draft.servicio;
+  itemState = draft.items || {}; photoState = draft.photos || {};
+  repuestosUsados = draft.repuestosUsados || []; repuestosRec = draft.repuestosRec || [];
+  entregaState = draft.entrega || {};
+  plannedState = draft.plannedState || {};
+  plannedSnapshot = draft.maintenancePlanSnapshot || null;
+  sigData.sigTecnico = draft.sigTecnico; sigData.sigSupervisor = draft.sigSupervisor;
+
+  document.getElementById('formTitle').textContent = draft.servicio === 'inspeccion' ? 'Inspección' : 'Mantención';
+  document.getElementById('recIdLabel').textContent = 'borrador recuperado';
+  document.getElementById('btnDelete').style.display = 'none';
+  document.getElementById('f_intervaloWrap').style.display = draft.servicio === 'mtto' ? 'block' : 'none';
+
+  populateFormAreaSelect(draft.area);
+  populateFormEquipoSelect();
+  const equipoDelDraft = draft.equipoId ? equipos.find(e => e.id === draft.equipoId) : null;
+  if(draft.equipoId){ document.getElementById('f_equipo').value = draft.equipoId; renderReferenciaMtto(equipoDelDraft); }
+  populateFormIntervalo(equipoDelDraft);
+  if(draft.intervalo) document.getElementById('f_intervalo').value = draft.intervalo;
+  renderPlannedMaintenance(equipoDelDraft, plannedSnapshot);
+
+  document.getElementById('f_ninforme').value = draft.ninforme || '';
+  document.getElementById('f_fecha').value = draft.fecha || '';
+  document.getElementById('f_tiposervicio').value = draft.tiposervicio || '';
+  renderTecnicoRows(draft.tecnico ? draft.tecnico.split(' / ') : []);
+  populateSupervisorSelect(draft.supervisor || '');
+  document.getElementById('f_horainicio').value = draft.horainicio || '';
+  document.getElementById('f_horatermino').value = draft.horatermino || '';
+  document.getElementById('f_marca').value = draft.marca || '';
+  document.getElementById('f_modelo').value = draft.modelo || '';
+  document.getElementById('f_serie').value = draft.serie || '';
+  document.getElementById('f_interno').value = draft.interno || '';
+  document.getElementById('f_ubicacion').value = draft.ubicacion || '';
+  document.getElementById('f_horometro').value = draft.horometro || '';
+  document.getElementById('f_horometroJust').value = draft.horometroJustificacion || '';
+  document.getElementById('f_hallazgos').value = draft.hallazgos || '';
+  document.getElementById('f_entregadoA').value = draft.entregadoA || '';
+  document.getElementById('f_cargo').value = draft.cargo || '';
+
+  renderSections(); renderRepuestosUsados(); renderRepuestosRec(); renderEntregaChecklist(); updateSummary();
+  goToView('form');
+  setTimeout(() => { setupSignature('sigTecnico'); setupSignature('sigSupervisor'); }, 30);
+  toast('✓ Borrador recuperado — sigue donde quedaste');
 }
 
 /* ============================================================
@@ -1884,7 +1985,7 @@ function renderPhotos(container, key){
   const add = document.createElement('label');
   add.className = 'add-photo';
   add.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="14" r="3.2"/></svg>Foto
-    <input type="file" accept="image/*" capture="environment" multiple style="display:none;">`;
+    <input type="file" accept="image/*" multiple style="display:none;">`;
   add.querySelector('input').addEventListener('change', (e) => handlePhotoFiles(e.target.files, key, container));
   container.appendChild(add);
 }
@@ -2127,20 +2228,20 @@ async function saveRecord(){
   if(sinEvidencia.length){
     toast(`✕ Hay ${sinEvidencia.length} ítem(s) MALO sin foto ni justificación. Completa uno de los dos para guardar.`);
     renderSections();
-    return;
+    return false;
   }
   const horaJustNecesaria = document.getElementById('horometroJustWrap').style.display !== 'none';
   if(horaJustNecesaria && !document.getElementById('f_horometroJust').value.trim()){
     toast('✕ Falta justificar el horómetro menor al último registrado.');
-    return;
+    return false;
   }
   const equipoId = document.getElementById('f_equipo').value;
-  if(!equipoId){ toast('✕ Selecciona un equipo antes de guardar.'); return; }
+  if(!equipoId){ toast('✕ Selecciona un equipo antes de guardar.'); return false; }
 
   const rec = buildRecord();
   currentId = rec.id;
   const sizeKB = Math.round(JSON.stringify(rec).length/1024);
-  if(sizeKB > 9000){ toast('⚠ Registro muy pesado (' + sizeKB + ' KB). Elimina algunas fotos.'); return; }
+  if(sizeKB > 9000){ toast('⚠ Registro muy pesado (' + sizeKB + ' KB). Elimina algunas fotos.'); return false; }
   try{
     await storage.set('registro:' + rec.id, rec);
     await updateIndex(rec);
@@ -2156,7 +2257,9 @@ async function saveRecord(){
     document.getElementById('btnDelete').style.display = 'block';
     toast('✓ Guardado (' + sizeKB + ' KB)');
     intentarSincronizar(rec); // en segundo plano, no bloquea el guardado local
-  }catch(err){ console.error(err); toast('✕ Error al guardar: ' + err.message); }
+    clearDraft();
+    return true;
+  }catch(err){ console.error(err); toast('✕ Error al guardar: ' + err.message); return false; }
 }
 async function updateIndex(rec){
   let idx = (await storage.get('registros_index')) || [];
@@ -2621,7 +2724,8 @@ document.getElementById('btnDelete').addEventListener('click', async () => {
   }
 });
 document.getElementById('btnPrint').addEventListener('click', async () => {
-  await saveRecord();
+  const guardadoOk = await saveRecord();
+  if(!guardadoOk) return; // no generar informe si el guardado fue bloqueado (ej. falta foto/justificación)
   buildPrintArea();
   // El nombre sugerido del PDF (al guardar/compartir desde el diálogo de impresión)
   // sale del título de la página — por defecto era el nombre de la app siempre.
@@ -2868,7 +2972,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v20'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v21'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
