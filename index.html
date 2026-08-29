@@ -169,6 +169,22 @@
   .ref-tramo:first-child{border-top:none;}
   .ref-horas{flex:none;width:38%;font-size:11.5px;font-weight:700;color:var(--steel);font-family:var(--font-mono);}
   .ref-items{flex:1;font-size:12.5px;line-height:1.4;}
+  .plan-card{background:#fff;border:1.5px solid var(--steel);border-radius:10px;margin-bottom:12px;overflow:hidden;}
+  .plan-head{padding:11px 14px;background:var(--steel);color:#fff;}
+  .plan-head h3{font-family:var(--font-display);font-size:14px;font-weight:700;margin:0;}
+  .plan-status{display:inline-block;margin-top:4px;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;}
+  .plan-item{padding:11px 14px;border-top:1px solid var(--line);}
+  .plan-item:first-child{border-top:none;}
+  .plan-item .comp{font-size:13.5px;font-weight:600;margin-bottom:2px;}
+  .plan-item .pn{font-size:11.5px;color:var(--muted);font-family:var(--font-mono);margin-bottom:8px;}
+  .plan-item .pn.pendiente{color:var(--regular);font-weight:700;}
+  .plan-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-bottom:7px;}
+  .plan-btn{padding:9px 2px;border-radius:8px;border:1.5px solid var(--line);background:#fff;font-size:10.5px;font-weight:700;color:var(--muted);cursor:pointer;text-align:center;font-family:var(--font-display);}
+  .plan-btn.rea.sel{background:var(--bueno-bg);border-color:var(--bueno);color:var(--bueno);}
+  .plan-btn.nrea.sel{background:var(--malo-bg);border-color:var(--malo);color:var(--malo);}
+  .plan-btn.na.sel{background:var(--na-bg);border-color:var(--na);color:var(--na);}
+  .plan-item textarea{width:100%;border:1.5px solid var(--line);border-radius:8px;padding:7px 9px;font-size:12.5px;font-family:var(--font-body);min-height:32px;}
+  .plan-condicion-tag{display:inline-block;background:var(--regular-bg);color:var(--regular);font-size:10px;font-weight:700;padding:2px 7px;border-radius:20px;margin-bottom:6px;}
   .filter-chip.active{background:var(--steel);border-color:var(--steel);color:#fff;}
 
   .toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--ink);color:#fff;padding:10px 18px;border-radius:30px;font-size:13px;font-weight:600;opacity:0;transition:all .25s;z-index:50;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.25);max-width:88vw;text-align:center;}
@@ -319,6 +335,7 @@
     </div>
 
     <div id="referenciaMttoCard" style="display:none;"></div>
+    <div id="plannedMaintenanceCard" style="display:none;"></div>
 
     <div id="sectionsWrap"></div>
 
@@ -630,6 +647,328 @@ const REFERENCIA_MTTO = {
   }
 };
 
+const MAINTENANCE_PARTS_VERSION = '2026-08-29-v1';
+
+// Datos reales de repuestos por equipo/frecuencia, entregados por el usuario
+// (14 planillas 'Repuestos_Frecuencias_Confirmados'). No se inventa ningún PN:
+// donde no vino confirmado, numeroParte queda en null y se marca 'PENDIENTE_PN'.
+const MAINTENANCE_PARTS = {
+  'GA15+': {
+    dataStatus: 'COMPLETE',
+    tiers: [2000, 4000, 8000],
+    tieneCondicion: true,
+    items: [
+      { tier: 'CONDICION', componente: 'CUBICLE VENTILATION KIT', numeroParte: '2901990819', codigoSap: '11231778', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 'CONDICION', componente: 'AIR FILTER', numeroParte: '1630220136', codigoSap: '11190636', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 2000, componente: 'CUBICLE VENTILATION KIT', numeroParte: '2901990819', codigoSap: '11231778', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 2000, componente: 'KIT filtro aire/aceite GA15 (CREADO EN SAP)', numeroParte: '2901990816', codigoSap: '11190635', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 2000, componente: 'ACEITE ULTRA 5L', numeroParte: '1630204105', codigoSap: null, cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Código SAP no visible / no informado en la captura' },
+      { tier: 2000, componente: 'KIT OIL SEPARATOR 11-15KW', numeroParte: '2901990814', codigoSap: '11231777', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 4000, componente: 'FILTRO MESH LD20X - ED12', numeroParte: '2902016102', codigoSap: '11153038', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 8000, componente: 'PREVENTIVE MAINTENANCE PACK 8000 HRS', numeroParte: '2901990820', codigoSap: '11231776', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+    ]
+  },
+  'GA160': {
+    dataStatus: 'COMPLETE',
+    tiers: [4000, 8000, 16000],
+    tieneCondicion: false,
+    items: [
+      { tier: 4000, componente: 'Filtro de aceite motor', numeroParte: '1621737890', codigoSap: '11004794', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Base PM 4.000 h' },
+      { tier: 4000, componente: 'Filtro de aceite unidad', numeroParte: '1630686750', codigoSap: '11195601', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Base PM 4.000 h' },
+      { tier: 4000, componente: 'Filtro de aire', numeroParte: '1630040899', codigoSap: '11004795', cantidad: 2, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Base PM 4.000 h' },
+      { tier: 4000, componente: 'Aceite lubricador', numeroParte: '1630091800', codigoSap: '11002552', cantidad: 40, unidad: 'LT aprox.', validacion: 'CONFIRMADO', nota: 'Base PM 4.000 h' },
+      { tier: 8000, componente: 'Juego filtro separador', numeroParte: '2901990564', codigoSap: '11195604', cantidad: 2, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a PM 4.000 h' },
+      { tier: 16000, componente: 'Kit válvula de admisión', numeroParte: null, codigoSap: null, cantidad: 1, unidad: 'KIT', validacion: 'PENDIENTE_PN', nota: 'Se suma a PM 4.000 + 8.000 h' },
+      { tier: 16000, componente: 'Kit válvula de retención', numeroParte: null, codigoSap: null, cantidad: 1, unidad: 'KIT', validacion: 'PENDIENTE_PN', nota: 'Se suma a PM 4.000 + 8.000 h' },
+      { tier: 16000, componente: 'Kit / servicio acoplamiento eléctrico-mecánico', numeroParte: null, codigoSap: null, cantidad: 1, unidad: 'KIT', validacion: 'PENDIENTE_PN', nota: 'Se suma a PM 4.000 + 8.000 h' },
+    ]
+  },
+  'GA250': {
+    dataStatus: 'COMPLETE',
+    tiers: [2000, 4000, 8000],
+    tieneCondicion: true,
+    items: [
+      { tier: 'CONDICION', componente: 'FILTRO AIRE', numeroParte: '1630058902', codigoSap: '11228349', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 'CONDICION', componente: 'FILTRO DE AIRE', numeroParte: '1630040899', codigoSap: '11004795', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 2000, componente: 'KIT Filtro de aire/aceite', numeroParte: '1837001411', codigoSap: '11228351', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 2000, componente: 'ROTO XTEND DUTY (20L)', numeroParte: '2901170100', codigoSap: '11070180', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 4000, componente: 'OIL SEPARATOR FILTER KIT-02', numeroParte: '2901990564', codigoSap: '11195604', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 4000, componente: 'ROTO XTEND ACEITE CAN (209L)', numeroParte: '2901170200', codigoSap: '44001977', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 4000, componente: 'ROTO XTEND DUTY (20L)', numeroParte: '2901170100', codigoSap: '11070180', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 8000, componente: 'KIT 8000 horas', numeroParte: '1837030435', codigoSap: '11231782', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 8000, componente: 'KIT MPV', numeroParte: '1837012135', codigoSap: '11207122', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 8000, componente: 'KIT FLEXMASTER JOINT', numeroParte: '2906057200', codigoSap: '11207121', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+    ]
+  },
+  'GA55': {
+    dataStatus: 'COMPLETE',
+    tiers: [2000, 4000, 8000],
+    tieneCondicion: true,
+    items: [
+      { tier: 'CONDICION', componente: 'KIT FILTROS DE AIRE GA55 (aparece secador)', numeroParte: '1837028954', codigoSap: '11228354', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 2000, componente: 'KIT FILTROS DE AIRE GA55', numeroParte: '1837028954', codigoSap: '11228354', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 2000, componente: 'KIT FILTRO DE ACEITE GA55/75', numeroParte: '1837028960', codigoSap: '11228352', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 2000, componente: 'ACEITE RS ULTRA 20L', numeroParte: '1630204120', codigoSap: '44001770', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 2000, componente: 'ACEITE ULTRA 5L', numeroParte: '1630204105', codigoSap: null, cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Código SAP no visible / no informado en la captura' },
+      { tier: 4000, componente: 'SEPARADOR DE ACEITE GA55/75', numeroParte: '1837028964', codigoSap: '11219214', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 8000, componente: 'KIT NRV LOW PRESSURE GA55/75', numeroParte: '1837008258', codigoSap: '11219227', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 8000, componente: 'KIT MONOVOLUMEN GA55/75', numeroParte: '1837028965', codigoSap: '11219210', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 8000, componente: 'KIT OSV-CV C106 GA55/75', numeroParte: '1837028967', codigoSap: '11231780', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 8000, componente: '(NS)*JUEGO VALVULA TERMICA 40° GA55/75', numeroParte: '2901161600', codigoSap: '11026581', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 8000, componente: 'KIT REP.VALVULA ASPIRACION GA55/75', numeroParte: '2901162200', codigoSap: '11026572', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 8000, componente: 'KIT DRENAJE HD GA55/75', numeroParte: '2901990685', codigoSap: '11206661', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+    ]
+  },
+  'GA75': {
+    dataStatus: 'COMPLETE',
+    tiers: [2000, 4000, 8000],
+    tieneCondicion: true,
+    items: [
+      { tier: 'CONDICION', componente: 'KIT FILTROS DE AIRE GA75', numeroParte: '1837028955', codigoSap: '11228353', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 2000, componente: 'KIT FILTROS DE AIRE GA75', numeroParte: '1837028955', codigoSap: '11228353', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 2000, componente: 'KIT FILTRO DE ACEITE GA55/75', numeroParte: '1837028960', codigoSap: '11228352', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 2000, componente: 'ACEITE RS ULTRA 20L', numeroParte: '1630204120', codigoSap: '44001770', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 2000, componente: 'ACEITE ULTRA 5L', numeroParte: '1630204105', codigoSap: null, cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Código SAP no visible / no informado en la captura' },
+      { tier: 4000, componente: 'SEPARADOR DE ACEITE GA55/75', numeroParte: '1837028964', codigoSap: '11219214', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 8000, componente: 'KIT NRV LOW PRESSURE GA55/75', numeroParte: '1837008258', codigoSap: '11219227', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 8000, componente: 'KIT MONOVOLUMEN GA55/75', numeroParte: '1837028965', codigoSap: '11219210', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 8000, componente: 'KIT OSV-CV C106 GA55/75', numeroParte: '1837028967', codigoSap: '11231780', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 8000, componente: '(NS)*JUEGO VALVULA TERMICA 40° GA55/75', numeroParte: '2901161600', codigoSap: '11026581', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 8000, componente: 'KIT REP.VALVULA ASPIRACION GA55/75', numeroParte: '2901162200', codigoSap: '11026572', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+      { tier: 8000, componente: 'KIT DRENAJE HD GA55/75', numeroParte: '2901990685', codigoSap: '11206661', cantidad: 1, unidad: null, validacion: 'CONFIRMADO', nota: 'Transcrito de captura' },
+    ]
+  },
+  'U-190': {
+    dataStatus: 'SIN_FRECUENCIA',
+    tiers: [],
+    tieneCondicion: false,
+    items: [
+      { tier: null, componente: 'Filtro de aceite unidad', numeroParte: '1625752501', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: '' },
+      { tier: null, componente: 'Filtro de aire primario', numeroParte: '2914930400', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: '' },
+      { tier: null, componente: 'Filtro de aire secundario', numeroParte: '2914930500', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: '' },
+      { tier: null, componente: 'Filtro separador', numeroParte: '1626832100', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: '' },
+      { tier: null, componente: 'Aceite lubricador', numeroParte: 'PAROIL S', codigoSap: null, cantidad: 10, unidad: 'L aprox.', validacion: 'CONFIRMADO', nota: '' },
+      { tier: null, componente: 'FW Separador', numeroParte: '1092837400', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: '' },
+      { tier: null, componente: 'Aceite lubricador', numeroParte: 'PAROIL E', codigoSap: null, cantidad: 10, unidad: 'L aprox.', validacion: 'CONFIRMADO', nota: '' },
+      { tier: null, componente: 'Filtro de aceite', numeroParte: '2913311200', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: '' },
+      { tier: null, componente: 'Filtro de aceite combustible', numeroParte: '1092638700', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: '' },
+      { tier: null, componente: 'Filtro de aire de motor primario', numeroParte: '2914930200', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: '' },
+      { tier: null, componente: null, numeroParte: null, codigoSap: null, cantidad: null, unidad: null, validacion: 'PENDIENTE_PN', nota: '' },
+    ]
+  },
+  'XAS-400': {
+    dataStatus: 'COMPLETE',
+    tiers: [250, 500, 1000],
+    tieneCondicion: false,
+    items: [
+      { tier: 250, componente: 'Filtro de aceite de motor', numeroParte: '1094190240', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Base PM 250 h | Obligatorio' },
+      { tier: 250, componente: 'Filtro de combustible', numeroParte: '1094176300', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Base PM 250 h | Alternativa según motor/configuración' },
+      { tier: 250, componente: 'Filtro de combustible', numeroParte: '1094217800', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Base PM 250 h | Alternativa según motor/configuración' },
+      { tier: 250, componente: 'Filtro de combustible', numeroParte: '1092471700', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Base PM 250 h | Alternativa según motor/configuración' },
+      { tier: 250, componente: 'Aceite lubricador PAROIL E', numeroParte: 'PAROIL E', codigoSap: null, cantidad: 10, unidad: 'L aprox.', validacion: 'CONFIRMADO', nota: 'Base PM 250 h | Aceite motor' },
+      { tier: 500, componente: 'FW Separador FUEL / filtro de agua', numeroParte: '1094176400', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a PM 250 h | Obligatorio' },
+      { tier: 500, componente: 'Filtro de aire motor primario', numeroParte: '1094190240', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a PM 250 h | Según tabla entregada' },
+      { tier: 500, componente: 'Filtro de aire motor secundario', numeroParte: '1094190250', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a PM 250 h | Según tabla entregada' },
+      { tier: 500, componente: 'Filtro de aire unidad compresora primario', numeroParte: '1094162540', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a PM 250 h | Obligatorio' },
+      { tier: 500, componente: 'Filtro de aire unidad compresora secundario', numeroParte: '1094162550', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a PM 250 h | Obligatorio' },
+      { tier: 1000, componente: 'Filtro de aceite unidad compresora', numeroParte: '1638578200', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a PM 500 h | Obligatorio' },
+      { tier: 1000, componente: 'Filtro separador aire/aceite', numeroParte: '1639578200', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a PM 500 h | Obligatorio' },
+      { tier: 1000, componente: 'Aceite unidad compresora PAROIL M', numeroParte: '1615595900', codigoSap: null, cantidad: 10, unidad: 'L aprox.', validacion: 'CONFIRMADO', nota: 'Se suma a PM 500 h | Aceite unidad' },
+    ]
+  },
+  'XAS-97': {
+    dataStatus: 'COMPLETE',
+    tiers: [250, 500, 1000],
+    tieneCondicion: false,
+    items: [
+      { tier: 250, componente: 'Filtro de aceite de motor', numeroParte: '242581822', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Base PM 250 h | Equivalencia indicada por usuario: LF3338 Fleetguard / Atlas Copco 2914920000' },
+      { tier: 250, componente: 'Filtro de aceite combustible (secundario)', numeroParte: '2900068700', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Base PM 250 h | Equivalencia indicada por usuario: P550588 Donaldson' },
+      { tier: 250, componente: 'Aceite lubricador motor', numeroParte: 'PAROIL E', codigoSap: null, cantidad: 8, unidad: 'L aprox.', validacion: 'CONFIRMADO', nota: 'Base PM 250 h | Volumen aproximado indicado por usuario' },
+      { tier: 500, componente: 'FW Separador de combustible', numeroParte: '1638431800', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a PM 250 h | Confirmado por usuario' },
+      { tier: 500, componente: 'Filtro de aire motor primario', numeroParte: '2914930200', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a PM 250 h | Dato completado por usuario' },
+      { tier: 500, componente: 'Filtro de aire motor secundario', numeroParte: '2914830300', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a PM 250 h | Dato completado por usuario' },
+      { tier: 500, componente: 'Filtro de aire unidad compresora primario', numeroParte: '1613800400', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a PM 250 h | Referencia adicional indicada: 1615938801' },
+      { tier: 500, componente: 'Filtro de aire unidad compresora secundario', numeroParte: '2914931100', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a PM 250 h | Dato completado por usuario' },
+      { tier: 1000, componente: 'Filtro de aceite unidad compresora', numeroParte: '1613610501', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a PM 500 h | Confirmado por usuario' },
+      { tier: 1000, componente: 'Filtro separador aire/aceite', numeroParte: '2911006800', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a PM 500 h | Código corregido por usuario; reemplaza 1613610500 como separador' },
+      { tier: 1000, componente: 'Aceite unidad compresora', numeroParte: '1615595900', codigoSap: null, cantidad: 10, unidad: 'L aprox.', validacion: 'CONFIRMADO', nota: 'Se suma a PM 500 h | PAROIL M; volumen aproximado indicado por usuario' },
+    ]
+  },
+  'XAS98': {
+    dataStatus: 'COMPLETE',
+    tiers: [250, 500, 1000],
+    tieneCondicion: false,
+    items: [
+      { tier: 250, componente: 'Filtro de aceite de motor', numeroParte: '119065-35151', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Base PM 250 h | Alternativa Atlas Copco indicada: 2914830100' },
+      { tier: 250, componente: 'Filtro de aceite combustible (secundario)', numeroParte: '129907-55801', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Base PM 250 h | Confirmado por usuario' },
+      { tier: 250, componente: 'Aceite lubricador motor', numeroParte: 'PAROIL E', codigoSap: null, cantidad: 10, unidad: 'L aprox.', validacion: 'CONFIRMADO', nota: 'Base PM 250 h | Volumen aproximado indicado por usuario' },
+      { tier: 500, componente: 'FW Separador de combustible', numeroParte: '2914830700', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a PM 250 h | Equivalente Yanmar indicado: 129A00-55800' },
+      { tier: 500, componente: 'Filtro de aire motor primario', numeroParte: '2914930200', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a PM 250 h | Código priorizado por usuario' },
+      { tier: 500, componente: 'Filtro de aire motor secundario', numeroParte: '2914830300', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a PM 250 h | Código corregido por usuario' },
+      { tier: 500, componente: 'Filtro de aire unidad compresora primario', numeroParte: '2914930400', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a PM 250 h | Código priorizado; equivalente/versión anterior indicada: 1092315500' },
+      { tier: 500, componente: 'Filtro de aire unidad compresora secundario', numeroParte: '2914930500', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a PM 250 h | Confirmado por usuario' },
+      { tier: 1000, componente: 'Filtro de aceite unidad compresora', numeroParte: '1613610500', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a PM 500 h | Confirmado por usuario' },
+      { tier: 1000, componente: 'Filtro separador aire/aceite', numeroParte: '1626832100', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a PM 500 h | Confirmado por usuario' },
+      { tier: 1000, componente: 'Aceite unidad compresora', numeroParte: 'PAROIL M', codigoSap: null, cantidad: 9, unidad: 'L aprox.', validacion: 'CONFIRMADO', nota: 'Se suma a PM 500 h | Usuario indica aprox. 8–10 L; se deja 9 L como referencia central, no valor exacto' },
+    ]
+  },
+  'MM75': {
+    dataStatus: 'COMPLETE',
+    tiers: [2000, 4000, 8000],
+    tieneCondicion: false,
+    items: [
+      { tier: 2000, componente: 'Filtro de aceite / Coolant Filter', numeroParte: '39911631', codigoSap: '11159113', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Cambio programado' },
+      { tier: 2000, componente: 'Filtro Panel Sala', numeroParte: '381890721', codigoSap: '11166722', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Inspección / reemplazo según polvo ambiental' },
+      { tier: 4000, componente: 'Filtro de aire compresor', numeroParte: '39708466', codigoSap: '11159114', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Cambio programado / bajo indicador de restricción' },
+      { tier: 8000, componente: 'Filtro separador aire/aceite', numeroParte: '54601513', codigoSap: '11159112', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Cambio programado mayor' },
+      { tier: 8000, componente: 'Ultra Coolant 20 L', numeroParte: '38459582', codigoSap: '11087258', cantidad: 1, unidad: 'BIDÓN 20 L', validacion: 'CONFIRMADO', nota: 'Cambio total de fluido' },
+      { tier: 8000, componente: 'Juego reparación IR', numeroParte: '99289852', codigoSap: '11159016', cantidad: 1, unidad: 'KIT', validacion: 'CONFIRMADO', nota: 'Inspección / instalar según desgaste mecánico' },
+      { tier: 8000, componente: 'Válvula termostática', numeroParte: '23137920', codigoSap: '11183499', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Inspección / reemplazo según condición' },
+      { tier: 8000, componente: 'Válvula mínima presión / check', numeroParte: '99289845', codigoSap: '11179183', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Inspección / reemplazo según condición' },
+      { tier: 8000, componente: 'Válvula solenoide 1/2 IN NPT 110V', numeroParte: '54654652', codigoSap: '11179184', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Inspección / reemplazo según condición' },
+      { tier: 8000, componente: 'Válvula solenoide 2-way NC', numeroParte: '22205462', codigoSap: '11179185', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Inspección / reemplazo según condición' },
+      { tier: 8000, componente: 'Relay Over Load', numeroParte: '644R0106', codigoSap: '11186961', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Inspección / reemplazo según condición eléctrica' },
+    ]
+  },
+  'ASD-40': {
+    dataStatus: 'COMPLETE',
+    tiers: [2000, 4000, 6000, 8000, 10000, 12000],
+    tieneCondicion: false,
+    items: [
+      { tier: 2000, componente: 'Esterilla filtrante 710x575x10', numeroParte: '6.1943.0', codigoSap: null, cantidad: 2, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 2000, componente: 'Esterilla filtrante 710x170x10', numeroParte: '7.4519.0', codigoSap: null, cantidad: 2, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 2000, componente: 'Elemento Filtrante de Aceite', numeroParte: '6.4778.0', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 2000, componente: 'Elemento Filtro de aire', numeroParte: '6.4143.1', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 4000, componente: 'Esterilla filtrante 710x575x10', numeroParte: '6.1943.0', codigoSap: null, cantidad: 2, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 4000, componente: 'Esterilla filtrante 710x170x10', numeroParte: '7.4519.0', codigoSap: null, cantidad: 2, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 4000, componente: 'Aceite Sigma Fluid Mol 5 Litros', numeroParte: '9.0920.100300', codigoSap: null, cantidad: 3, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 4000, componente: 'Kit Cartucho Separador Aire/Aceite', numeroParte: '6.3669.0', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 4000, componente: 'Elemento Filtrante de Aceite', numeroParte: '6.4778.0', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 4000, componente: 'Elemento Filtro de aire', numeroParte: '6.4143.1', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 4000, componente: 'Kit Service-Unit ECO-DRAIN 31/', numeroParte: '8.2474.01510', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 6000, componente: 'Esterilla filtrante 710x575x10', numeroParte: '6.1943.0', codigoSap: null, cantidad: 2, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 6000, componente: 'Esterilla filtrante 710x170x10', numeroParte: '7.4519.0', codigoSap: null, cantidad: 2, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 6000, componente: 'Elemento Filtrante de Aceite', numeroParte: '6.4778.0', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 6000, componente: 'Elemento Filtro de aire', numeroParte: '6.4143.1', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 8000, componente: 'Esterilla filtrante 710x575x10', numeroParte: '6.1943.0', codigoSap: null, cantidad: 2, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 8000, componente: 'Esterilla filtrante 710x170x10', numeroParte: '7.4519.0', codigoSap: null, cantidad: 2, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 8000, componente: 'Aceite Sigma Fluid Mol 5 Litros', numeroParte: '9.0920.100300', codigoSap: null, cantidad: 3, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 8000, componente: 'Kit Cartucho Separador Aire/Aceite', numeroParte: '6.3669.0', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 8000, componente: 'Elemento Filtrante de Aceite', numeroParte: '6.4778.0', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 8000, componente: 'Elemento Filtro de aire', numeroParte: '6.4143.1', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 8000, componente: 'Kit Service-Unit ECO-DRAIN 31/', numeroParte: '8.2474.01510', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 8000, componente: 'Kit mantenimiento Valvula Retencion', numeroParte: '400992.1', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 8000, componente: 'Kit mantenimiento Valvula Admision', numeroParte: '400990.0', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 8000, componente: 'Kit mantenimiento Valvula control y venteo', numeroParte: '400706.0', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 8000, componente: 'Kit mantenimiento reguladora temperatura', numeroParte: '404092.1', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 10000, componente: 'Esterilla filtrante 710x575x10', numeroParte: '6.1943.0', codigoSap: null, cantidad: 2, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 10000, componente: 'Esterilla filtrante 710x170x10', numeroParte: '7.4519.0', codigoSap: null, cantidad: 2, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 10000, componente: 'Elemento Filtrante de Aceite', numeroParte: '6.4778.0', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 10000, componente: 'Elemento Filtro de aire', numeroParte: '6.4143.1', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 12000, componente: 'Esterilla filtrante 710x575x10', numeroParte: '6.1943.0', codigoSap: null, cantidad: 2, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 12000, componente: 'Esterilla filtrante 710x170x10', numeroParte: '7.4519.0', codigoSap: null, cantidad: 2, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 12000, componente: 'Aceite Sigma Fluid Mol 5 Litros', numeroParte: '9.0920.100300', codigoSap: null, cantidad: 3, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 12000, componente: 'Kit Cartucho Separador Aire/Aceite', numeroParte: '6.3669.0', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 12000, componente: 'Elemento Filtrante de Aceite', numeroParte: '6.4778.0', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 12000, componente: 'Elemento Filtro de aire', numeroParte: '6.4143.1', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 12000, componente: 'Kit Service-Unit ECO-DRAIN 31/', numeroParte: '8.2474.01510', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 12000, componente: 'Kit mantenimiento Valvula Retencion', numeroParte: '400992.1', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 12000, componente: 'Kit mantenimiento Valvula Admision', numeroParte: '400990.0', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 12000, componente: 'Kit mantenimiento Valvula control y venteo', numeroParte: '400706.0', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 12000, componente: 'Kit mantenimiento reguladora temperatura', numeroParte: '404092.1', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+      { tier: 12000, componente: 'Rodamiento Ranurado de Bolas 6', numeroParte: '6.0034.00010', codigoSap: null, cantidad: 2, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Asignación de frecuencia tomada exactamente de bloque verde en captura.' },
+    ]
+  },
+  'CSD-105': {
+    dataStatus: 'COMPLETE',
+    tiers: [2000, 4000, 8000],
+    tieneCondicion: false,
+    items: [
+      { tier: 2000, componente: 'Esterilla filtrante para armario eléctrico', numeroParte: '7.4519.0', codigoSap: '11174219', cantidad: 2, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Base PM 2.000 h' },
+      { tier: 2000, componente: 'Esterilla filtrante de aire de salida', numeroParte: '7.451.900.040', codigoSap: '11174218', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Base PM 2.000 h' },
+      { tier: 4000, componente: 'Filtro de aceite', numeroParte: '6.4493.0', codigoSap: '11174217', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a la pauta de 2.000 h' },
+      { tier: 4000, componente: 'Filtro de aire, diámetro 420', numeroParte: '6.5993.0', codigoSap: '11174216', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a la pauta de 2.000 h' },
+      { tier: 4000, componente: 'Elemento filtrante de aire 2', numeroParte: '6.4149.1', codigoSap: '11174199', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a la pauta de 2.000 h' },
+      { tier: 4000, componente: 'Cartucho separador de aire', numeroParte: '6.3571.0', codigoSap: '11174198', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a la pauta de 2.000 h' },
+      { tier: 4000, componente: 'Fluido Sigma Fluid S-460 sintético, 5 GL/18.93 LT', numeroParte: '9.540.900.080', codigoSap: '11005235', cantidad: 4, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a la pauta de 2.000 h' },
+      { tier: 8000, componente: 'Juego de mantenimiento para válvula RPM', numeroParte: '40.071.110.021', codigoSap: '11174197', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a las pautas de 2.000 h y 4.000 h' },
+      { tier: 8000, componente: 'Juego de mantenimiento para válvula de admisión', numeroParte: '400892', codigoSap: '11174196', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a las pautas de 2.000 h y 4.000 h' },
+      { tier: 8000, componente: 'Juego de mantenimiento para válvula combinada', numeroParte: '40.099.400.010', codigoSap: '11174195', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a las pautas de 2.000 h y 4.000 h' },
+      { tier: 8000, componente: 'Juego de mantenimiento para válvula despresurizadora', numeroParte: '400905', codigoSap: '11174194', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a las pautas de 2.000 h y 4.000 h' },
+      { tier: 8000, componente: 'Juego de mantenimiento para válvula despresurizadora', numeroParte: '403756', codigoSap: '11174193', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a las pautas de 2.000 h y 4.000 h' },
+      { tier: 8000, componente: 'Juego de mantenimiento para válvula sobrecarga', numeroParte: '222958', codigoSap: '11174192', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a las pautas de 2.000 h y 4.000 h' },
+      { tier: 8000, componente: 'Unidad de servicio para purga de condensado', numeroParte: '8.247.401.510', codigoSap: '11174191', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a las pautas de 2.000 h y 4.000 h' },
+    ]
+  },
+  'CSDX165': {
+    dataStatus: 'COMPLETE',
+    tiers: [2000, 4000, 8000],
+    tieneCondicion: false,
+    items: [
+      { tier: 2000, componente: 'ELEMENTO;KAESER;4E03020', numeroParte: '4E03020', codigoSap: '11188843', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Transcrito de captura SAP; sin normalizar PN' },
+      { tier: 2000, componente: 'FILTRO;KAESER;646930', numeroParte: '646930', codigoSap: '11188844', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Transcrito de captura SAP; sin normalizar PN' },
+      { tier: 4000, componente: 'CARTUCHO;KAESER;636230', numeroParte: '636230', codigoSap: '11188842', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Transcrito de captura SAP; sin normalizar PN' },
+      { tier: 4000, componente: 'ELEMENTO;KAESER;4E03020', numeroParte: '4E03020', codigoSap: '11188843', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Transcrito de captura SAP; sin normalizar PN' },
+      { tier: 4000, componente: 'FILTRO;KAESER;646930', numeroParte: '646930', codigoSap: '11188844', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Transcrito de captura SAP; sin normalizar PN' },
+      { tier: 4000, componente: 'ACEITE;KAESER;90012000030', numeroParte: '90012000030', codigoSap: '44002718', cantidad: 7, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Transcrito de captura SAP; sin normalizar PN' },
+      { tier: 8000, componente: 'UNIDAD;KAESER;8247401510', numeroParte: '8247401510', codigoSap: '11174191', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Transcrito de captura SAP; sin normalizar PN' },
+      { tier: 8000, componente: 'JGO REPARACION;KAESER;40070700020', numeroParte: '40070700020', codigoSap: '11184924', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Transcrito de captura SAP; sin normalizar PN' },
+      { tier: 8000, componente: 'CARTUCHO;KAESER;636230', numeroParte: '636230', codigoSap: '11188842', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Transcrito de captura SAP; sin normalizar PN' },
+      { tier: 8000, componente: 'ELEMENTO;KAESER;4E03020', numeroParte: '4E03020', codigoSap: '11188843', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Transcrito de captura SAP; sin normalizar PN' },
+      { tier: 8000, componente: 'FILTRO;KAESER;646930', numeroParte: '646930', codigoSap: '11188844', cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Transcrito de captura SAP; sin normalizar PN' },
+      { tier: 8000, componente: 'ACEITE;KAESER;90012000030', numeroParte: '90012000030', codigoSap: '44002718', cantidad: 7, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Transcrito de captura SAP; sin normalizar PN' },
+    ]
+  },
+  'M50': {
+    dataStatus: 'COMPLETE',
+    tiers: [250, 500, 1000],
+    tieneCondicion: false,
+    items: [
+      { tier: 250, componente: 'Juego Filtros 250 Hr', numeroParte: '5913750', codigoSap: '11102625', cantidad: 1, unidad: 'JGO', validacion: 'CONFIRMADO', nota: 'Cambio programado' },
+      { tier: 250, componente: 'Aceite motor diésel 15W40', numeroParte: '15W40', codigoSap: null, cantidad: 6.5, unidad: 'L aprox.', validacion: 'CONFIRMADO', nota: 'Cantidad indicada 6–7 L aprox.; especificación según proveedor Kubota' },
+      { tier: 500, componente: 'Filtro de aire principal', numeroParte: '6.2185.0', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Dato agregado por usuario; sin SAP en captura' },
+      { tier: 1000, componente: 'Filtro de aceite unidad compresora', numeroParte: '6.1985.0', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Versión indicada: 6.1985.0; texto menciona alternativa 6.1985.1' },
+      { tier: 1000, componente: 'Juego cartucho separador aire/aceite', numeroParte: '635250', codigoSap: '11183688', cantidad: 1, unidad: 'JGO', validacion: 'CONFIRMADO', nota: 'Cambio programado mayor' },
+      { tier: 1000, componente: 'Sigma Fluid MOL 5 L', numeroParte: '9.0920.00030', codigoSap: '44000120', cantidad: 9, unidad: 'L aprox.', validacion: 'CONFIRMADO', nota: 'Carga total aprox. 9 L; material SAP de presentación 5 L' },
+    ]
+  },
+};
+
+// Mapea el 'modelo' del maestro de equipos a su clave estable en MAINTENANCE_PARTS
+// (evita comparar texto libre; XAS98/XAS-98 son el mismo equipo con dos grafías).
+const MODELO_TO_MAINTENANCE_KEY = {
+  'CSDX165':'CSDX165', 'GA160':'GA160', 'GA250':'GA250', 'GA75':'GA75', 'GA55':'GA55', 'GA15+':'GA15+',
+  'ASD-40':'ASD-40', 'MM75':'MM75', 'CSD-105':'CSD-105', 'M50':'M50',
+  'XAS98':'XAS98', 'XAS-98':'XAS98', 'XAS-97':'XAS-97', 'XAS-400':'XAS-400',
+  'U-190-1':'U-190', 'U-190-2':'U-190', 'U-190-3':'U-190', 'U-190-4':'U-190',
+  // XAS88 no tiene planilla confirmada todavía -> deliberadamente sin mapear (PENDING)
+};
+function getMaintenanceKey(equipo){ return equipo ? (MODELO_TO_MAINTENANCE_KEY[equipo.modelo] || null) : null; }
+
+// ============================================================
+// MOTOR: equipo + intervalo -> repuestos/actividades planificadas.
+// No aplica ninguna regla matemática propia (ni acumulativa ni cíclica):
+// usa literalmente lo que la planilla confirmada indica por repuesto.
+// Los ítems marcados "CONDICION" (a evaluar según desgaste/uso, no ligados
+// a una hora fija) se muestran siempre, aparte del intervalo elegido.
+// ============================================================
+function getPlannedMaintenance(equipo, intervaloNum){
+  const key = getMaintenanceKey(equipo);
+  const model = key ? MAINTENANCE_PARTS[key] : null;
+  if(!model) return { status: 'NOT_FOUND', dataStatus: null, items: [] };
+  if(model.dataStatus === 'SIN_FRECUENCIA'){
+    return { status: 'SIN_FRECUENCIA', dataStatus: model.dataStatus, items: model.items };
+  }
+  const items = model.items.filter(it =>
+    it.tier === 'CONDICION' || (typeof it.tier === 'number' && intervaloNum != null && it.tier <= intervaloNum)
+  );
+  return { status: 'OK', dataStatus: model.dataStatus, items };
+}
+function activityId(equipo, item, idx){
+  const key = getMaintenanceKey(equipo) || 'EQ';
+  return `${key}_${item.tier}_${idx}_${(item.componente||'').replace(/\s+/g,'').slice(0,20)}`;
+}
+
 function getFamiliaEquipo(equipo){
   if(!equipo) return null;
   if(equipo.categoria === 'portatil') return 'portatil';
@@ -701,6 +1040,13 @@ function formatHorasLabel(n){
 // Devuelve solo los intervalos que realmente aplican al equipo elegido, sacados
 // directamente de su propia tabla de referencia (sin tramos "siempre").
 function intervalosParaEquipo(equipo){
+  // 1° prioridad: datos reales confirmados por planilla (tiers exactos, sin inventar múltiplos)
+  const mkey = equipo ? getMaintenanceKey(equipo) : null;
+  const model = mkey ? MAINTENANCE_PARTS[mkey] : null;
+  if(model && model.tiers && model.tiers.length){
+    return model.tiers.map(formatHorasLabel).concat(['Otro']);
+  }
+  // 2° prioridad (fallback): equipos aún sin planilla confirmada (ej. XAS88)
   const ref = equipo ? getReferenciaEquipo(equipo) : null;
   if(!ref) return INTERVALOS; // sin referencia mapeada -> lista genérica completa
   const nums = [...new Set(ref.tramos.filter(t => !t.siempre && t.horasNum).map(t => t.horasNum))].sort((a,b) => a-b);
@@ -946,6 +1292,8 @@ let itemState = {};           // { 'motor-0': {status:'', obs:''}, ... }  status
 let photoState = {};          // { 'motor-0': [dataURL,...] }
 let repuestosUsados = [];     // [{descripcion,parte,cantidad}]
 let repuestosRec = [];        // [{descripcion,parte,cantidad,obs}]
+let plannedState = {};        // { activityId: {status:'realizado'|'no_realizado'|'na'|'', obs:''} }
+let plannedSnapshot = null;   // foto de la pauta usada en este registro (se guarda con el informe)
 let entregaState = {};        // { 0:true, 1:false, ... }
 let sigData = { sigTecnico:null, sigSupervisor:null };
 let histFilter = 'todos';
@@ -1114,6 +1462,13 @@ document.getElementById('f_equipo').addEventListener('change', (e) => {
     if([...intervaloSel.options].some(o => o.value === previo)) intervaloSel.value = previo;
     document.getElementById('f_tiposervicio').value = 'MANTENCIÓN — ' + intervaloSel.value;
   }
+  // el equipo cambió: la pauta planificada anterior ya no aplica
+  plannedState = {};
+  repuestosUsados = repuestosUsados.filter(r => !r.activityId);
+  repuestosRec = repuestosRec.filter(r => !r.activityId);
+  renderPlannedMaintenance(equipo, null);
+  renderRepuestosUsados();
+  renderRepuestosRec();
   rebuildMttoPautaIfNeeded();
 });
 function applyEquipoToForm(equipo){
@@ -1143,6 +1498,9 @@ function rebuildMttoPautaIfNeeded(){
 function renderReferenciaMtto(equipo){
   const box = document.getElementById('referenciaMttoCard');
   if(currentServicio !== 'mtto'){ box.style.display = 'none'; box.innerHTML = ''; return; }
+  // si ya existe la planilla real de repuestos para este equipo, esta tarjeta antigua
+  // queda redundante — la reemplaza la sección "Repuestos y actividades programadas".
+  if(equipo && getMaintenanceKey(equipo)){ box.style.display = 'none'; box.innerHTML = ''; return; }
   const ref = getReferenciaEquipo(equipo);
   if(!ref){ box.style.display = 'none'; box.innerHTML = ''; return; }
   box.style.display = 'block';
@@ -1166,6 +1524,104 @@ function renderReferenciaMtto(equipo){
     document.querySelector('#refToggle .chev').classList.toggle('open');
   });
 }
+
+const DATA_STATUS_BADGE = {
+  COMPLETE: { label: '✓ Pauta técnica confirmada', bg: 'var(--bueno-bg)', color: 'var(--bueno)' },
+  PARTIAL: { label: '⚠ Pauta parcial — algunos N° de parte pendientes', bg: 'var(--regular-bg)', color: 'var(--regular)' },
+  SIN_FRECUENCIA: { label: 'ℹ Repuestos confirmados, sin frecuencia asignada aún', bg: 'var(--na-bg)', color: 'var(--na)' },
+  SNAPSHOT: { label: '📌 Pauta histórica de este informe (no cambia si se actualiza la base)', bg: 'var(--na-bg)', color: 'var(--muted)' },
+};
+
+function renderPlannedMaintenance(equipo, snapshotOverride){
+  const box = document.getElementById('plannedMaintenanceCard');
+  if(currentServicio !== 'mtto' || !equipo || !getMaintenanceKey(equipo)){
+    box.style.display = 'none'; box.innerHTML = ''; return;
+  }
+  if(snapshotOverride !== undefined) plannedSnapshot = snapshotOverride; // fija el snapshot activo para los siguientes re-render
+  let res;
+  if(plannedSnapshot && plannedSnapshot.items){
+    res = { status:'OK', dataStatus: 'SNAPSHOT', items: plannedSnapshot.items };
+  } else {
+    const intervaloNum = parseIntervaloHoras(document.getElementById('f_intervalo').value);
+    res = getPlannedMaintenance(equipo, intervaloNum);
+  }
+  box.style.display = 'block';
+
+  const condicion = res.items.filter(it => it.tier === 'CONDICION');
+  const porHora = res.items.filter(it => it.tier !== 'CONDICION');
+  const badge = DATA_STATUS_BADGE[res.dataStatus] || DATA_STATUS_BADGE.PARTIAL;
+
+  function itemHTML(item, idx){
+    const aid = activityId(equipo, item, idx);
+    const st = plannedState[aid] || { status:'', obs:'' };
+    const pnTxt = item.numeroParte ? item.numeroParte : 'Pendiente de validar';
+    const pnClass = item.numeroParte ? '' : 'pendiente';
+    return `
+      <div class="plan-item" data-aid="${esc(aid)}">
+        <div class="comp">${esc(item.componente || 'Repuesto')}</div>
+        <div class="pn ${pnClass}">PN: ${esc(pnTxt)}${item.codigoSap ? ' · SAP: '+esc(item.codigoSap) : ''} · Cant.: ${item.cantidad != null ? esc(item.cantidad) : '—'}${item.unidad ? ' '+esc(item.unidad) : ''}</div>
+        <div class="plan-row">
+          <div class="plan-btn rea ${st.status==='realizado'?'sel':''}" data-status="realizado">REALIZADO</div>
+          <div class="plan-btn nrea ${st.status==='no_realizado'?'sel':''}" data-status="no_realizado">NO REALIZADO</div>
+          <div class="plan-btn na ${st.status==='na'?'sel':''}" data-status="na">N/A</div>
+        </div>
+        <textarea placeholder="Observación (ej: sin stock, se pospone)…">${esc(st.obs||'')}</textarea>
+      </div>`;
+  }
+
+  box.innerHTML = `
+    <div class="plan-card">
+      <div class="plan-head">
+        <h3>🔧 Repuestos y actividades programadas</h3>
+        <span class="plan-status" style="background:${badge.bg};color:${badge.color};">${badge.label}</span>
+      </div>
+      ${porHora.map((it,i) => itemHTML(it, i)).join('') || (res.dataStatus==='SIN_FRECUENCIA' ? '' : '<div class="plan-item" style="color:var(--muted);">Sin ítems programados para este intervalo.</div>')}
+      ${condicion.length ? `<div class="plan-item" style="background:var(--paper);">
+          <div class="plan-condicion-tag">A EVALUAR SEGÚN CONDICIÓN</div>
+          ${condicion.map((it,i) => itemHTML(it, 'c'+i)).join('')}
+        </div>` : ''}
+    </div>`;
+
+  // asocia cada tarjeta a su ítem real (por índice de aparición) para la copia automática
+  const todos = porHora.map((it,i) => ({ item: it, aid: activityId(equipo, it, i) }))
+    .concat(condicion.map((it,i) => ({ item: it, aid: activityId(equipo, it, 'c'+i) })));
+
+  todos.forEach(({item, aid}) => {
+    if(!plannedState[aid]) plannedState[aid] = { status:'', obs:'' };
+    const div = box.querySelector(`[data-aid="${CSS.escape(aid)}"]`);
+    if(!div) return;
+    div.querySelectorAll('.plan-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const nuevo = plannedState[aid].status === btn.dataset.status ? '' : btn.dataset.status;
+        plannedState[aid].status = nuevo;
+        aplicarCopiaAutomatica(aid, item, nuevo);
+        renderPlannedMaintenance(equipo);
+      });
+    });
+    div.querySelector('textarea').addEventListener('input', (e) => { plannedState[aid].obs = e.target.value; });
+  });
+}
+
+// Copia automática: Realizado -> Repuestos utilizados · No realizado -> Repuestos recomendados.
+// Usa activityId para no duplicar filas si se marca/desmarca varias veces (spec §41-42).
+function aplicarCopiaAutomatica(aid, item, nuevoStatus){
+  repuestosUsados = repuestosUsados.filter(r => r.activityId !== aid);
+  repuestosRec = repuestosRec.filter(r => r.activityId !== aid);
+  if(nuevoStatus === 'realizado'){
+    repuestosUsados.push({
+      activityId: aid, descripcion: item.componente || '', parte: item.numeroParte || '',
+      cantidad: item.cantidad != null ? String(item.cantidad) : '', descModo: 'libre'
+    });
+  } else if(nuevoStatus === 'no_realizado'){
+    repuestosRec.push({
+      activityId: aid, descripcion: item.componente || '', parte: item.numeroParte || '',
+      cantidad: item.cantidad != null ? String(item.cantidad) : '', obs: 'No realizado en esta intervención'
+    });
+  }
+  renderRepuestosUsados();
+  renderRepuestosRec();
+}
+
 
 async function renderHistorialEquipoMini(equipo){
   const box = document.getElementById('historialEquipoMini');
@@ -1199,6 +1655,13 @@ document.getElementById('f_horometro').addEventListener('input', async () => {
 
 document.getElementById('f_intervalo').addEventListener('change', (e) => {
   document.getElementById('f_tiposervicio').value = 'MANTENCIÓN — ' + e.target.value;
+  const equipoActual = equipos.find(eq => eq.id === document.getElementById('f_equipo').value);
+  plannedState = {};
+  repuestosUsados = repuestosUsados.filter(r => !r.activityId);
+  repuestosRec = repuestosRec.filter(r => !r.activityId);
+  renderPlannedMaintenance(equipoActual, null);
+  renderRepuestosUsados();
+  renderRepuestosRec();
   rebuildMttoPautaIfNeeded();
 });
 
@@ -1304,6 +1767,8 @@ function startNewForm(servicio){
   repuestosRec = [];
   entregaState = {};
   sigData = { sigTecnico:null, sigSupervisor:null };
+  plannedState = {};
+  plannedSnapshot = null;
 
   document.getElementById('formTitle').textContent = servicio === 'inspeccion' ? 'Inspección' : 'Mantención';
   document.getElementById('recIdLabel').textContent = 'registro nuevo';
@@ -1594,6 +2059,18 @@ setupSignature('sigTecnico'); setupSignature('sigSupervisor');
 /* ============================================================
    GUARDAR / CARGAR / ELIMINAR
    ============================================================ */
+function buildPlannedSnapshot(equipoSel){
+  const mkey = getMaintenanceKey(equipoSel);
+  if(!mkey) return null;
+  const intervaloNum = currentServicio === 'mtto' ? parseIntervaloHoras(document.getElementById('f_intervalo').value) : null;
+  const res = getPlannedMaintenance(equipoSel, intervaloNum);
+  return {
+    maintenanceKey: mkey,
+    intervalo: currentServicio === 'mtto' ? document.getElementById('f_intervalo').value : null,
+    version: MAINTENANCE_PARTS_VERSION,
+    items: res.items // copia congelada de los ítems mostrados en este registro
+  };
+}
 function buildRecord(){
   const equipoSel = equipos.find(e => e.id === document.getElementById('f_equipo').value);
   return {
@@ -1621,6 +2098,8 @@ function buildRecord(){
     items: itemState,
     photos: photoState,
     repuestosUsados, repuestosRec,
+    plannedState,
+    maintenancePlanSnapshot: buildPlannedSnapshot(equipoSel),
     entrega: entregaState,
     entregadoA: document.getElementById('f_entregadoA').value,
     cargo: document.getElementById('f_cargo').value,
@@ -1895,6 +2374,7 @@ async function loadRecordIntoForm(id){
   itemState = rec.items; photoState = rec.photos || {};
   repuestosUsados = rec.repuestosUsados || []; repuestosRec = rec.repuestosRec || [];
   entregaState = rec.entrega || {};
+  plannedState = rec.plannedState || {};
   sigData.sigTecnico = rec.sigTecnico; sigData.sigSupervisor = rec.sigSupervisor;
 
   document.getElementById('formTitle').textContent = rec.servicio === 'inspeccion' ? 'Inspección' : 'Mantención';
@@ -1911,6 +2391,9 @@ async function loadRecordIntoForm(id){
   }
   populateFormIntervalo(equipoDelRegistro);
   if(rec.intervalo) document.getElementById('f_intervalo').value = rec.intervalo;
+  // usa el snapshot congelado (si el registro lo tiene) para que no cambie aunque
+  // MAINTENANCE_PARTS se haya actualizado desde que se guardó este informe
+  renderPlannedMaintenance(equipoDelRegistro, rec.maintenancePlanSnapshot || null);
 
   document.getElementById('f_ninforme').value = rec.ninforme || '';
   document.getElementById('f_fecha').value = rec.fecha || '';
@@ -2140,7 +2623,14 @@ document.getElementById('btnDelete').addEventListener('click', async () => {
 document.getElementById('btnPrint').addEventListener('click', async () => {
   await saveRecord();
   buildPrintArea();
+  // El nombre sugerido del PDF (al guardar/compartir desde el diálogo de impresión)
+  // sale del título de la página — por defecto era el nombre de la app siempre.
+  const equipoSel = equipos.find(e => e.id === document.getElementById('f_equipo').value);
+  const nombreArchivo = [document.getElementById('f_ninforme').value, equipoSel ? equipoSel.nombre : ''].filter(Boolean).join(' - ') || document.title;
+  const tituloOriginal = document.title;
+  document.title = nombreArchivo;
   window.print();
+  setTimeout(() => { document.title = tituloOriginal; }, 1000);
 });
 
 document.getElementById('btnCompartir').addEventListener('click', async () => {
@@ -2153,11 +2643,14 @@ document.getElementById('btnCompartir').addEventListener('click', async () => {
   const fecha = document.getElementById('f_fecha').value || '—';
   const horometro = document.getElementById('f_horometro').value || '—';
   const texto = `${servicioLabel} — ${equipoNombre}\nFolio: ${ninforme}\nFecha: ${fecha} · Horómetro: ${horometro} h\n\nResultado: ${counts.bueno} Bueno / ${counts.regular} Regular / ${counts.malo} Malo\nEstado: ${estado.label}`;
+  // Respaldo: siempre queda copiado al portapapeles, aunque el share nativo no
+  // rellene bien el correo (en computador a veces no carga el cuerpo del mensaje).
+  if(navigator.clipboard){ try{ await navigator.clipboard.writeText(texto); }catch(e){} }
   if(navigator.share){
     try{ await navigator.share({ title: `${servicioLabel} ${equipoNombre}`, text: texto }); }
-    catch(err){ /* usuario canceló, no hacer nada */ }
+    catch(err){ toast('✓ Resumen copiado al portapapeles (pégalo donde lo necesites)'); return; }
+    toast('✓ También quedó copiado al portapapeles por si el correo llegó vacío');
   } else if(navigator.clipboard){
-    await navigator.clipboard.writeText(texto);
     toast('✓ Resumen copiado — pégalo donde quieras enviarlo');
   } else {
     toast('Este navegador no soporta compartir directo. Usa "Informe" para el PDF completo.');
@@ -2232,17 +2725,41 @@ function buildPrintArea(){
     html += `<div class="p-empty">Sin componentes evaluados con hallazgo.</div>`;
   }
 
-  // 4. Repuestos y materiales utilizados
+  // 4. Actividades / repuestos programados (solo si el equipo tiene planilla real conectada)
+  const equipoParaPlan = equipoSel;
+  const planSnapshot = plannedSnapshot || buildPlannedSnapshot(equipoParaPlan);
+  if(equipoParaPlan && getMaintenanceKey(equipoParaPlan) && planSnapshot && planSnapshot.items){
+    html += `<div class="p-sec">4. ACTIVIDADES / REPUESTOS PROGRAMADOS (${esc(planSnapshot.intervalo || '')})</div>`;
+    const marcados = planSnapshot.items.filter((it, i) => {
+      const aid = activityId(equipoParaPlan, it, it.tier === 'CONDICION' ? 'c'+i : i);
+      return plannedState[aid] && plannedState[aid].status;
+    });
+    if(marcados.length){
+      html += `<table class="p-table"><tr><th>Actividad</th><th style="width:14%">Resultado</th><th>Observación</th></tr>`;
+      planSnapshot.items.forEach((it, i) => {
+        const aid = activityId(equipoParaPlan, it, it.tier === 'CONDICION' ? 'c'+i : i);
+        const st = plannedState[aid];
+        if(!st || !st.status) return;
+        const lbl = st.status === 'realizado' ? 'REALIZADO' : st.status === 'no_realizado' ? 'NO REALIZADO' : 'N/A';
+        html += `<tr><td>${esc(it.componente||'')}</td><td class="p-status">${lbl}</td><td>${esc(st.obs||'—')}</td></tr>`;
+      });
+      html += `</table>`;
+    } else {
+      html += `<div class="p-empty">Sin actividades marcadas.</div>`;
+    }
+  }
+
+  // 5. Repuestos y materiales utilizados
   const rUsados = repuestosUsados.filter(r => (r.descripcion||'').trim());
-  html += `<div class="p-sec">4. REPUESTOS Y MATERIALES UTILIZADOS</div>`;
+  html += `<div class="p-sec">5. REPUESTOS Y MATERIALES UTILIZADOS</div>`;
   if(rUsados.length){
     html += `<table class="p-table"><tr><th>Ítem</th><th>Descripción</th><th>N° Parte</th><th>Cantidad</th></tr>`;
     rUsados.forEach((r,i) => { html += `<tr><td>${i+1}</td><td>${esc(r.descripcion)}</td><td>${esc(r.parte||'—')}</td><td>${esc(r.cantidad||'—')}</td></tr>`; });
     html += `</table>`;
   } else { html += `<div class="p-empty">Sin repuestos registrados.</div>`; }
 
-  // 5. Registro fotográfico agrupado por actividad (solo de ítems evaluados)
-  html += `<div class="p-sec">5. REGISTRO FOTOGRÁFICO</div>`;
+  // 6. Registro fotográfico agrupado por actividad (solo de ítems evaluados)
+  html += `<div class="p-sec">6. REGISTRO FOTOGRÁFICO</div>`;
   const conFotos = evaluados.filter(e => e.photos.length);
   if(conFotos.length){
     conFotos.forEach(e => {
@@ -2251,12 +2768,12 @@ function buildPrintArea(){
   } else { html += `<div class="p-empty">Sin fotografías adjuntas.</div>`; }
 
   // 6. Observaciones, hallazgos y recomendaciones
-  html += `<div class="p-sec">6. OBSERVACIONES, HALLAZGOS Y RECOMENDACIONES</div>`;
+  html += `<div class="p-sec">7. OBSERVACIONES, HALLAZGOS Y RECOMENDACIONES</div>`;
   html += hallazgos ? `<div class="p-item">${esc(hallazgos).replace(/\n/g,'<br>')}</div>` : `<div class="p-empty">Sin observaciones adicionales.</div>`;
 
   // 7. Repuestos recomendados próxima mantención
   const rRec = repuestosRec.filter(r => (r.descripcion||'').trim());
-  html += `<div class="p-sec">7. REPUESTOS E INSUMOS RECOMENDADOS PARA PRÓXIMAS MANTENCIONES</div>`;
+  html += `<div class="p-sec">8. REPUESTOS E INSUMOS RECOMENDADOS PARA PRÓXIMAS MANTENCIONES</div>`;
   if(rRec.length){
     html += `<table class="p-table"><tr><th>Ítem</th><th>Descripción</th><th>N° Parte</th><th>Cant. Sugerida</th><th>Observación</th></tr>`;
     rRec.forEach((r,i) => { html += `<tr><td>${i+1}</td><td>${esc(r.descripcion)}</td><td>${esc(r.parte||'—')}</td><td>${esc(r.cantidad||'—')}</td><td>${esc(r.obs||'—')}</td></tr>`; });
@@ -2264,7 +2781,7 @@ function buildPrintArea(){
   } else { html += `<div class="p-empty">Sin recomendaciones.</div>`; }
 
   // 8. Entrega del equipo a Operaciones
-  html += `<div class="p-sec">8. ENTREGA DEL EQUIPO A OPERACIONES</div>`;
+  html += `<div class="p-sec">9. ENTREGA DEL EQUIPO A OPERACIONES</div>`;
   html += `<table class="p-table"><tr><th style="width:80%">Ítem</th><th>Estado</th></tr>`;
   ENTREGA_ITEMS.forEach((txt,i) => { html += `<tr><td>${esc(txt)}</td><td>${entregaState[i] ? 'SÍ' : '—'}</td></tr>`; });
   html += `</table>`;
@@ -2351,7 +2868,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v18'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v20'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
