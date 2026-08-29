@@ -706,12 +706,18 @@ const MTTO_SEGURIDAD = [
   'Estado inicial del equipo registrado (fotografía antes de intervenir).',
   'Placa de identificación / N° de serie fotografiada.',
 ];
-const MTTO_COMPONENTES_INSPECCION = [
-  'Alternador/motor: voltaje de salida y estado físico verificado.',
-  'Motor de arranque o accionamiento: comprobación de conexiones eléctricas.',
+const MTTO_COMPONENTES_COMUN = [
   'Correas y poleas: tensión, alineación y desgaste (inspección, salvo cambio indicado arriba).',
   'Mangueras y conexiones: grietas, resequedad, fugas (inspección, salvo cambio indicado arriba).',
   'Conexiones eléctricas generales verificadas y ajustadas.',
+];
+const MTTO_COMPONENTES_PORTATIL = [
+  'Alternador: voltaje de salida y estado físico verificado.',
+  'Motor de arranque: accionamiento y conexiones eléctricas comprobados.',
+];
+const MTTO_COMPONENTES_ESTATICO = [
+  'Motor eléctrico: conexiones, bornera y protecciones térmicas verificadas.',
+  'Contactor / partidor: estado y funcionamiento verificado.',
 ];
 const MTTO_PUESTA_MARCHA = [
   'Indicadores, luces piloto y controlador verificados en condiciones normales.',
@@ -759,10 +765,13 @@ function buildMttoPauta(){
     MTTO_GENERICO_FALLBACK.forEach(it => especificaItems.push(it));
   }
 
+  const esPortatil = equipo ? equipo.categoria === 'portatil' : true;
+  const componentesItems = (esPortatil ? MTTO_COMPONENTES_PORTATIL : MTTO_COMPONENTES_ESTATICO).concat(MTTO_COMPONENTES_COMUN);
+
   const secciones = [
     { key:'seguridad', title:'SEGURIDAD Y BLOQUEO', items: MTTO_SEGURIDAD },
     { key:'especifica', title: ref ? `MANTENCIÓN — ${ref.label.toUpperCase()}` : 'MANTENCIÓN — TAREAS GENÉRICAS (equipo sin referencia aún)', items: especificaItems },
-    { key:'componentes', title:'COMPONENTES Y CONEXIONES', items: MTTO_COMPONENTES_INSPECCION },
+    { key:'componentes', title:'COMPONENTES Y CONEXIONES', items: componentesItems },
   ];
   if(equipo && equipo.categoria === 'portatil'){
     secciones.push({ key:'estructura', title:'ESTRUCTURA Y MOVILIDAD (PORTÁTIL)', items: MTTO_ESTRUCTURA_PORTATIL });
@@ -772,39 +781,61 @@ function buildMttoPauta(){
 }
 
 // Pauta de INSPECCIÓN (23 ítems, ANT-PHN-25-006 Rev.01)
-const INSPECCION_ITEMS = [
-  { key:'motor', title:'MOTOR DIÉSEL', items:[
-    'Aceite de motor drenado y reemplazado según especificación del fabricante.',
-    'Nivel de aceite verificado con varilla medidora.',
-    'Filtro de aceite del motor reemplazado; sellos/O-rings revisados.',
-    'Filtro de combustible reemplazado; sellos/O-rings revisados.',
-    'Filtro de aire de admisión (motor y unidad) reemplazado y cierre hermético verificado.',
-    'Nivel y estado de refrigerante verificado (color, limpieza, sin contaminación).'
-  ]},
-  { key:'unidad', title:'UNIDAD COMPRESORA (TORNILLO)', items:[
-    'Aceite de la unidad compresora drenado e inspeccionado (partículas metálicas, agua).',
-    'Aceite nuevo cargado según especificación; nivel verificado en visor.',
-    'Filtro de aceite de la unidad compresora reemplazado y ajustado a torque.',
-    'Filtro separador aire-aceite reemplazado; carcasa cerrada sin fugas.',
-    'Rodamientos del lado motor y unidad compresora monitoreados/engrasados.'
-  ]},
-  { key:'componentes', title:'VERIFICACIÓN O CAMBIO DE COMPONENTES', items:[
-    'Alternador: voltaje de salida medido y estado físico verificado.',
-    'Motor de arranque: accionamiento y conexiones eléctricas comprobados.',
-    'Radiador: panal, aletas y posibles obstrucciones/fugas inspeccionadas.',
+function buildInspeccionPauta(){
+  const equipoId = document.getElementById('f_equipo') ? document.getElementById('f_equipo').value : '';
+  const equipo = equipos.find(e => e.id === equipoId);
+  const esPortatil = equipo ? equipo.categoria === 'portatil' : true; // sin equipo elegido aún -> mantiene la vista original
+
+  const seccionMotor = esPortatil
+    ? { key:'motor', title:'MOTOR DIÉSEL', items:[
+        'Aceite de motor drenado y reemplazado según especificación del fabricante.',
+        'Nivel de aceite verificado con varilla medidora.',
+        'Filtro de aceite del motor reemplazado; sellos/O-rings revisados.',
+        'Filtro de combustible reemplazado; sellos/O-rings revisados.',
+        'Filtro de aire de admisión (motor y unidad) reemplazado y cierre hermético verificado.',
+        'Nivel y estado de refrigerante verificado (color, limpieza, sin contaminación).'
+      ]}
+    : { key:'motor', title:'MOTOR ELÉCTRICO', items:[
+        'Temperatura de operación del motor verificada (sin sobrecalentamiento).',
+        'Ruido y vibración anormal verificados.',
+        'Conexiones eléctricas del motor: apriete y estado verificado.',
+        'Ventilación del motor libre de obstrucciones.',
+        'Aislamiento y protecciones térmicas verificadas.'
+      ]};
+
+  const seccionComponentes = { key:'componentes', title:'VERIFICACIÓN O CAMBIO DE COMPONENTES', items: [
+    ...(esPortatil ? [
+      'Alternador: voltaje de salida medido y estado físico verificado.',
+      'Motor de arranque: accionamiento y conexiones eléctricas comprobados.',
+      'Radiador: panal, aletas y posibles obstrucciones/fugas inspeccionadas.',
+    ] : [
+      'Contactor / partidor: estado y funcionamiento verificado.',
+    ]),
     'Mangueras y conexiones: grietas, resequedad, abultamientos o fugas revisadas.',
     'Correas y poleas: tensión, alineación y desgaste verificados.',
     'Componentes reemplazados (si corresponde) y funcionamiento verificado tras el cambio.'
-  ]},
-  { key:'puesta', title:'PUESTA EN MARCHA Y PRUEBAS', items:[
-    'Bloqueo/etiquetado retirado y corta corriente posicionado en ON.',
-    'Indicadores, luces piloto y controlador verificados en condiciones normales.',
-    'Válvula de descarga de aire abierta en forma gradual y progresiva.',
-    'Estabilización de presión monitoreada dentro de parámetros normales.',
-    'Ausencia de fugas de aire y aceite verificada tras la presurización.',
-    'Todas las protecciones y puertas laterales reinstaladas correctamente.'
-  ]}
-];
+  ]};
+
+  return [
+    seccionMotor,
+    { key:'unidad', title:'UNIDAD COMPRESORA (TORNILLO)', items:[
+      'Aceite de la unidad compresora drenado e inspeccionado (partículas metálicas, agua).',
+      'Aceite nuevo cargado según especificación; nivel verificado en visor.',
+      'Filtro de aceite de la unidad compresora reemplazado y ajustado a torque.',
+      'Filtro separador aire-aceite reemplazado; carcasa cerrada sin fugas.',
+      'Rodamientos del lado motor y unidad compresora monitoreados/engrasados.'
+    ]},
+    seccionComponentes,
+    { key:'puesta', title:'PUESTA EN MARCHA Y PRUEBAS', items:[
+      'Bloqueo/etiquetado retirado y corta corriente posicionado en ON.',
+      'Indicadores, luces piloto y controlador verificados en condiciones normales.',
+      'Válvula de descarga de aire abierta en forma gradual y progresiva.',
+      'Estabilización de presión monitoreada dentro de parámetros normales.',
+      'Ausencia de fugas de aire y aceite verificada tras la presurización.',
+      'Todas las protecciones y puertas laterales reinstaladas correctamente.'
+    ]}
+  ];
+}
 
 
 const ENTREGA_ITEMS = [
@@ -816,7 +847,7 @@ const ENTREGA_ITEMS = [
   'Equipo probado y en condiciones de operar'
 ];
 
-function itemsForServicio(servicio){ return servicio === 'inspeccion' ? INSPECCION_ITEMS : buildMttoPauta(); }
+function itemsForServicio(servicio){ return servicio === 'inspeccion' ? buildInspeccionPauta() : buildMttoPauta(); }
 
 /* ============================================================
    ALMACENAMIENTO PROPIO (IndexedDB) — independiente, en este dispositivo.
@@ -1064,12 +1095,12 @@ function applyEquipoToForm(equipo){
   renderRepuestosUsados();
 }
 
-// Rearma la pauta de Mantención (secciones + ítems) cuando cambia el equipo o el
-// intervalo elegido. Solo aplica al servicio Mantención — Inspección no cambia.
+// Rearma la pauta (secciones + ítems) cuando cambia el equipo o el intervalo
+// elegido — aplica a Mantención (equipo+intervalo) e Inspección (equipo, ya
+// que motor diésel/eléctrico y componentes dependen de la categoría).
 function rebuildMttoPautaIfNeeded(){
-  if(currentServicio !== 'mtto') return;
-  itemState = blankItemState('mtto');
-  photoState = blankPhotoState('mtto');
+  itemState = blankItemState(currentServicio);
+  photoState = blankPhotoState(currentServicio);
   renderSections();
   updateSummary();
 }
@@ -2066,7 +2097,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v14'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v15'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
