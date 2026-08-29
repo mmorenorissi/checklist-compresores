@@ -394,15 +394,26 @@
   <section class="view" id="view-history">
     <div class="card">
       <div class="card-head"><h2>Registros guardados</h2></div>
-      <div class="card-pad" style="padding-bottom:0;">
-        <input type="text" id="histSearch" placeholder="Buscar por equipo, serie o folio…" style="width:100%;padding:9px 11px;border:1.5px solid var(--line);border-radius:8px;font-size:14px;">
+      <div class="card-pad" style="padding-bottom:0;display:flex;gap:8px;align-items:center;">
+        <input type="text" id="histSearch" placeholder="Buscar por equipo, serie o folio…" style="flex:1;padding:9px 11px;border:1.5px solid var(--line);border-radius:8px;font-size:14px;">
+        <button id="btnFetchRemote" title="Actualizar desde la nube" style="flex:none;width:40px;height:40px;border-radius:8px;border:1.5px solid var(--line);background:#fff;font-size:17px;">☁️</button>
       </div>
+      <div id="remoteStatusLine" style="padding:0 14px;font-size:11px;color:var(--muted);margin-top:6px;"></div>
       <div class="filter-row" id="histFilters">
         <div class="filter-chip active" data-f="todos">Todos</div>
         <div class="filter-chip" data-f="inspeccion">Inspección</div>
         <div class="filter-chip" data-f="mtto">Mantención</div>
       </div>
       <div id="histList" style="margin-top:8px;"></div>
+    </div>
+    <div class="modal-bg" id="remoteModal">
+      <div style="background:#fff;border-radius:12px;max-width:480px;width:100%;max-height:85vh;overflow-y:auto;padding:0;">
+        <div style="position:sticky;top:0;background:var(--graphite);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;border-radius:12px 12px 0 0;">
+          <b style="font-family:var(--font-display);">Registro remoto (solo lectura)</b>
+          <button id="btnCloseRemoteModal" style="background:none;border:none;color:#fff;font-size:20px;">✕</button>
+        </div>
+        <div id="remoteModalBody" style="padding:16px;font-size:13px;"></div>
+      </div>
     </div>
     <div class="card">
       <div class="card-head"><h2>Sincronización compartida (opcional)</h2></div>
@@ -1783,6 +1794,92 @@ document.getElementById('btnSyncSave').addEventListener('click', async () => {
   renderSyncStatusBadge();
 });
 document.getElementById('btnSyncNow').addEventListener('click', sincronizarPendientes);
+
+/* ============================================================
+   HISTORIAL COMPARTIDO — traer registros de otros dispositivos.
+   Se guarda en caché local ('remote_index') y se combina con lo propio
+   solo para MOSTRAR en la lista; no se mezcla con los datos locales reales.
+   Los registros de otros se abren en modo solo lectura.
+   ============================================================ */
+async function fetchRemoteList(){
+  const cfg = await getSyncConfig();
+  if(!cfg || !cfg.url || !cfg.appKey) return { ok:false, reason:'no_config' };
+  if(!navigator.onLine) return { ok:false, reason:'offline' };
+  try{
+    const url = cfg.url + '?action=listar&key=' + encodeURIComponent(cfg.appKey) + '&limit=300';
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if(!data || !data.ok) return { ok:false, reason: (data && data.error) || 'error_servidor' };
+    await storage.set('remote_index', { registros: data.registros || [], fetchedAt: new Date().toISOString() });
+    return { ok:true, count: (data.registros||[]).length };
+  }catch(e){
+    return { ok:false, reason:'network' };
+  }
+}
+document.getElementById('btnFetchRemote').addEventListener('click', async () => {
+  const cfg = await getSyncConfig();
+  if(!cfg || !cfg.url || !cfg.appKey){ toast('Configura la sincronización más abajo primero.'); return; }
+  toast('Consultando la nube…');
+  const r = await fetchRemoteList();
+  if(r.ok) toast(`✓ ${r.count} registro(s) en la nube`);
+  else toast('✕ No se pudo actualizar (' + r.reason + ')');
+  loadHistory();
+});
+async function remoteRowHTML(item){
+  const fecha = item.fecha || '—';
+  const equipo = item.equipo || item.modelo || 'Equipo';
+  const estado = (item.estado || '').toUpperCase();
+  const cls = estado.includes('NO OPERATIVO') || estado.includes('CRÍTICO') ? 'malo' : estado.includes('OBSERVACION') ? 'regular' : 'bueno';
+  const servicioLabel = (item.tipoServicio||'').toLowerCase().includes('inspecc') ? 'Inspección' : 'Mantención';
+  return `<div class="hist-item" data-remote="${esc(item.id)}">
+    <div class="hist-badge" style="background:var(--steel);">🌐</div>
+    <div class="hist-main">
+      <div class="t1">${esc(equipo)}</div>
+      <div class="t2">${esc(servicioLabel)} · ${esc(fecha)} · ${esc(item.tecnicos||'')}</div>
+    </div>
+    <div class="hist-chip" style="${cls==='malo'?'background:var(--malo-bg);color:var(--malo);':cls==='regular'?'background:var(--regular-bg);color:var(--regular);':'background:var(--bueno-bg);color:var(--bueno);'}">${esc(estado || 'remoto')}</div>
+  </div>`;
+}
+async function openRemoteDetail(id){
+  const cfg = await getSyncConfig();
+  if(!cfg) return;
+  const body = document.getElementById('remoteModalBody');
+  body.innerHTML = 'Cargando…';
+  document.getElementById('remoteModal').classList.add('show');
+  try{
+    const url = cfg.url + '?action=obtener&key=' + encodeURIComponent(cfg.appKey) + '&id=' + encodeURIComponent(id);
+    const resp = await fetch(url);
+    const data = await resp.json();
+    if(!data || !data.ok || !data.registro){ body.innerHTML = 'No se pudo cargar el registro.'; return; }
+    const r = data.registro;
+    const full = r.jsonCompleto && typeof r.jsonCompleto === 'object' ? r.jsonCompleto : null;
+    let html = `
+      <div style="margin-bottom:10px;">
+        <b>${esc(r.equipo||'')}</b><br>
+        <span style="color:var(--muted);">${esc(r.marca||'')} ${esc(r.modelo||'')} · Serie ${esc(r.serie||'—')}</span><br>
+        <span style="color:var(--muted);">Folio: ${esc(r.nroInforme||'—')} · ${esc(r.fecha||'')}</span><br>
+        <span style="color:var(--muted);">Técnico(s): ${esc(r.tecnicos||'—')} · Supervisor: ${esc(r.supervisor||'—')}</span><br>
+        <b style="color:var(--steel);">Estado: ${esc(r.estado||'—')}</b>
+      </div>`;
+    if(full && full.items){
+      const evaluados = Object.values(full.items).filter(s => s.status === 'bueno' || s.status === 'regular' || s.status === 'malo');
+      if(evaluados.length){
+        html += `<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px;">Ítems evaluados (${evaluados.length})</div>`;
+        evaluados.forEach(s => {
+          const c = s.status==='malo' ? 'var(--malo)' : s.status==='regular' ? 'var(--regular)' : 'var(--bueno)';
+          html += `<div style="padding:7px 0;border-top:1px solid var(--line);"><b style="color:${c};">[${s.status.toUpperCase()}]</b> ${esc(s.obs||'')}</div>`;
+        });
+      }
+      if(full.hallazgos) html += `<div style="margin-top:10px;padding:8px 10px;background:var(--paper);border-radius:8px;"><b>Hallazgos:</b> ${esc(full.hallazgos)}</div>`;
+    } else {
+      html += `<p style="color:var(--muted);font-style:italic;">Este registro es anterior a la sincronización de detalle, o no se pudo reconstruir el detalle completo.</p>`;
+    }
+    html += `<p style="margin-top:14px;font-size:11px;color:var(--muted);">📷 Las fotos de este registro quedaron solo en el dispositivo que las tomó.</p>`;
+    body.innerHTML = html;
+  }catch(e){ body.innerHTML = 'Error al cargar el registro.'; }
+}
+document.getElementById('btnCloseRemoteModal').addEventListener('click', () => document.getElementById('remoteModal').classList.remove('show'));
+document.getElementById('remoteModal').addEventListener('click', (e) => { if(e.target.id === 'remoteModal') e.currentTarget.classList.remove('show'); });
 async function loadRecordIntoForm(id){
   const rec = await storage.get('registro:' + id);
   if(!rec){ toast('No se encontró el registro'); return; }
@@ -1862,8 +1959,22 @@ async function loadHistory(){
   const list = document.getElementById('histList');
   list.innerHTML = '<div class="empty-state">Cargando…</div>';
   let idx = (await storage.get('registros_index')) || [];
-  document.getElementById('histCount').textContent = idx.length ? idx.length : '';
-  if(histFilter !== 'todos') idx = idx.filter(x => x.servicio === histFilter);
+  const idsLocales = new Set(idx.map(x => x.id));
+
+  const remoteCache = await storage.get('remote_index');
+  const statusLine = document.getElementById('remoteStatusLine');
+  if(remoteCache && remoteCache.fetchedAt){
+    const fecha = new Date(remoteCache.fetchedAt);
+    statusLine.textContent = `Última actualización de la nube: ${fecha.toLocaleString('es-CL')}`;
+  } else {
+    statusLine.textContent = '';
+  }
+  const remotos = (remoteCache && remoteCache.registros ? remoteCache.registros : []).filter(r => !idsLocales.has(r.id));
+
+  document.getElementById('histCount').textContent = (idx.length + remotos.length) || '';
+  if(histFilter !== 'todos'){
+    idx = idx.filter(x => x.servicio === histFilter);
+  }
   if(histSearchTerm){
     idx = idx.filter(x =>
       (x.equipoLabel||'').toLowerCase().includes(histSearchTerm) ||
@@ -1872,12 +1983,25 @@ async function loadHistory(){
       (x.ninforme||'').toLowerCase().includes(histSearchTerm)
     );
   }
-  if(!idx.length){ list.innerHTML = `<div class="empty-state">Sin registros que coincidan.</div>`; return; }
-  list.innerHTML = idx.map(item => `<div style="display:flex;align-items:center;">
+  const remotosFiltrados = remotos.filter(r => {
+    if(histSearchTerm){
+      const hay = (r.equipo||'').toLowerCase().includes(histSearchTerm) || (r.serie||'').toLowerCase().includes(histSearchTerm) || (r.nroInforme||'').toLowerCase().includes(histSearchTerm);
+      if(!hay) return false;
+    }
+    return true;
+  });
+
+  if(!idx.length && !remotosFiltrados.length){ list.innerHTML = `<div class="empty-state">Sin registros que coincidan.</div>`; return; }
+
+  const localesHTML = idx.map(item => `<div style="display:flex;align-items:center;">
       <div style="flex:1;">${historyRowHTML(item)}</div>
       <button class="hist-del" data-del="${item.id}" style="margin-right:10px;">🗑</button>
     </div>`).join('');
+  const remotosHTML = await Promise.all(remotosFiltrados.map(r => remoteRowHTML(r)));
+
+  list.innerHTML = localesHTML + remotosHTML.join('');
   list.querySelectorAll('[data-open]').forEach(el => el.addEventListener('click', () => loadRecordIntoForm(el.dataset.open)));
+  list.querySelectorAll('[data-remote]').forEach(el => el.addEventListener('click', () => openRemoteDetail(el.dataset.remote)));
   list.querySelectorAll('[data-del]').forEach(el => el.addEventListener('click', async (e) => {
     e.stopPropagation();
     if(confirm('¿Eliminar este registro?')){ await deleteRecord(el.dataset.del); loadHistory(); }
@@ -2219,7 +2343,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v16'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v17'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
