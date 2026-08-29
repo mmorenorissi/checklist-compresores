@@ -1988,9 +1988,12 @@ function renderPlannedMaintenance(equipo, snapshotOverride){
   box.style.display = 'block';
 
   const porHora = res.items.filter(it => it.tier !== 'CONDICION');
-  const porHoraKeys = new Set(porHora.map(it => (it.componente||'') + '|' + (it.numeroParte||'')));
-  // si el mismo repuesto (componente+PN) ya aparece en un tramo por hora, no repetirlo también en "por condición"
-  const condicion = res.items.filter(it => it.tier === 'CONDICION' && !porHoraKeys.has((it.componente||'') + '|' + (it.numeroParte||'')));
+  // clave de deduplicación: el N° de parte manda si existe (el texto puede variar levemente
+  // para la misma pieza física, ej. "KIT FILTROS GA55" vs "KIT FILTROS GA55 (aparece secador)")
+  const claveItem = (it) => it.numeroParte ? ('PN:'+it.numeroParte) : ('TXT:'+(it.componente||''));
+  const porHoraKeys = new Set(porHora.map(claveItem));
+  // si el mismo repuesto ya aparece en un tramo por hora, no repetirlo también en "por condición"
+  const condicion = res.items.filter(it => it.tier === 'CONDICION' && !porHoraKeys.has(claveItem(it)));
   const badge = DATA_STATUS_BADGE[res.dataStatus] || DATA_STATUS_BADGE.PARTIAL;
 
   function itemHTML(item, idx){
@@ -2726,7 +2729,7 @@ async function updateIndex(rec){
   idx.unshift({
     id: rec.id, servicio: rec.servicio, equipoLabel: rec.interno || rec.modelo, marcaModelo: (rec.marca+' '+rec.modelo).trim(),
     serie: rec.serie, ninforme: rec.ninforme, equipoId: rec.equipoId, fecha: rec.fecha, savedAt: rec.savedAt,
-    malo: counts.malo, bueno: counts.bueno, criticoAlta: counts.criticoAlta, syncStatus: rec.syncStatus || 'local', pdfUrl: rec.pdfUrl || null
+    malo: counts.malo, regular: counts.regular, bueno: counts.bueno, criticoAlta: counts.criticoAlta, syncStatus: rec.syncStatus || 'local', pdfUrl: rec.pdfUrl || null
   });
   await storage.set('registros_index', idx);
 }
@@ -3037,6 +3040,7 @@ function historyRowHTML(item){
   let cls = 'bueno', chipText = 'Operativo';
   if(item.criticoAlta > 0){ cls = 'malo'; chipText = 'Crítico'; }
   else if(item.malo > 0){ cls = 'regular'; chipText = item.malo + ' con obs.'; }
+  else if(item.regular > 0){ cls = 'regular'; chipText = 'Con observaciones'; }
   const servicioLabel = item.servicio === 'inspeccion' ? 'Inspección' : 'Mantención';
   const syncIcon = item.syncStatus === 'sincronizado' ? '☁️' : item.syncStatus === 'pendiente' ? '⏳' : '';
   const pdfIcon = item.pdfUrl ? `<a href="${esc(item.pdfUrl)}" target="_blank" onclick="event.stopPropagation()" title="Abrir PDF en Drive">📄</a>` : '';
@@ -3229,18 +3233,39 @@ document.getElementById('btnDelete').addEventListener('click', async () => {
     goToView('history');
   }
 });
+function buildInformeFilename(){
+  const servicioLabel = currentServicio === 'inspeccion' ? 'Inspección' : 'Mantención';
+  const equipoSel = equipos.find(e => e.id === document.getElementById('f_equipo').value);
+  const modelo = equipoSel ? equipoSel.modelo : (document.getElementById('f_modelo').value || 'Equipo');
+  const intervalo = currentServicio === 'mtto' ? document.getElementById('f_intervalo').value.replace(/[.\s]/g,'') : '';
+  const fechaRaw = document.getElementById('f_fecha').value;
+  let fechaFmt = fechaRaw;
+  if(fechaRaw && /^\d{4}-\d{2}-\d{2}$/.test(fechaRaw)){
+    const [y,m,d] = fechaRaw.split('-');
+    fechaFmt = `${d}-${m}-${y}`; // se usa guion, no "/" — la barra no es válida en nombres de archivo
+  }
+  const partes = [servicioLabel, intervalo, modelo, fechaFmt].filter(Boolean);
+  return partes.join(' ').replace(/[\\/:*?"<>|]/g, '-') + '.pdf';
+}
+
 document.getElementById('btnPrint').addEventListener('click', async () => {
   const guardadoOk = await saveRecord();
   if(!guardadoOk) return; // no generar informe si el guardado fue bloqueado (ej. falta foto/justificación)
-  buildPrintArea();
-  // El nombre sugerido del PDF (al guardar/compartir desde el diálogo de impresión)
-  // sale del título de la página — por defecto era el nombre de la app siempre.
-  const equipoSel = equipos.find(e => e.id === document.getElementById('f_equipo').value);
-  const nombreArchivo = [document.getElementById('f_ninforme').value, equipoSel ? equipoSel.nombre : ''].filter(Boolean).join(' - ') || document.title;
-  const tituloOriginal = document.title;
-  document.title = nombreArchivo;
-  window.print();
-  setTimeout(() => { document.title = tituloOriginal; }, 1000);
+  toast('Generando PDF…');
+  const filename = buildInformeFilename();
+  try{
+    const doc = await generarInformePDF();
+    const blob = doc.output('blob');
+    const file = new File([blob], filename, { type: 'application/pdf' });
+    // navigator.share con archivo -> el nombre queda fijo de verdad (no depende de ningún título de página),
+    // y el panel de compartir del teléfono ya incluye imprimir/AirPrint como una opción más ahí mismo.
+    if(navigator.canShare && navigator.canShare({ files: [file] })){
+      try{ await navigator.share({ files: [file], title: filename }); }
+      catch(err){ /* el usuario cerró el panel de compartir, no es un error */ }
+      return;
+    }
+    doc.save(filename); // navegadores de escritorio sin Web Share: descarga directa con el nombre correcto
+  }catch(err){ console.error(err); toast('✕ Error al generar el PDF: ' + err.message); }
 });
 
 document.getElementById('btnCompartir').addEventListener('click', async () => {
@@ -3702,7 +3727,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v27'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v29'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
