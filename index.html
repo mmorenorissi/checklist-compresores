@@ -1186,10 +1186,8 @@ const MAINTENANCE_PARTS = {
     tiers: [250, 500, 1000],
     tieneCondicion: false,
     items: [
-      { tier: 250, componente: 'Filtro de aceite de motor', numeroParte: '1094190240', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Base PM 250 h | Obligatorio' },
-      { tier: 250, componente: 'Filtro de combustible', numeroParte: '1094176300', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Base PM 250 h | Alternativa según motor/configuración' },
-      { tier: 250, componente: 'Filtro de combustible', numeroParte: '1094217800', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Base PM 250 h | Alternativa según motor/configuración' },
-      { tier: 250, componente: 'Filtro de combustible', numeroParte: '1092471700', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Base PM 250 h | Alternativa según motor/configuración' },
+      { tier: 250, componente: 'Filtro de aceite de motor', numeroParte: '1094176200', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Base PM 250 h | Obligatorio — PN indicado por Mario (29-08-2026) para bloque John Deere de esta serie; puede variar según el bloque específico instalado, confirmar en placa del motor si hay duda' },
+      { tier: 250, componente: 'Filtro de combustible', numeroParte: '1094176300', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Base PM 250 h | Confirmado por Mario (28-08-2026) — descartadas alternativas 1094217800 y 1092471700' },
       { tier: 250, componente: 'Aceite lubricador PAROIL E', numeroParte: 'PAROIL E', codigoSap: null, cantidad: 10, unidad: 'L aprox.', validacion: 'CONFIRMADO', nota: 'Base PM 250 h | Aceite motor' },
       { tier: 500, componente: 'FW Separador FUEL / filtro de agua', numeroParte: '1094176400', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a PM 250 h | Obligatorio' },
       { tier: 500, componente: 'Filtro de aire motor primario', numeroParte: '1094190240', codigoSap: null, cantidad: 1, unidad: 'UN', validacion: 'CONFIRMADO', nota: 'Se suma a PM 250 h | Según tabla entregada' },
@@ -1830,7 +1828,7 @@ function goToView(name){
   document.getElementById('view-' + name).classList.add('active');
   document.getElementById('actionbar-form').style.display = name === 'form' ? 'flex' : 'none';
   if(name === 'home') renderHome();
-  if(name === 'history'){ loadHistory(); loadSyncConfigIntoForm(); }
+  if(name === 'history'){ loadHistory(); loadSyncConfigIntoForm(); autoFetchRemoteOnEnter(); }
   if(name === 'equip'){ renderEquipList(); populateAreaSelectPlain('eArea'); renderTecnicosList(); renderSupervisoresList(); }
   if(name === 'form'){
     // el lienzo de firma se configuró la primera vez con el formulario oculto (medía 0x0);
@@ -2910,6 +2908,16 @@ document.getElementById('btnFetchRemote').addEventListener('click', async () => 
   else toast('✕ No se pudo actualizar (' + r.reason + ')');
   loadHistory();
 });
+let lastAutoFetchAt = 0;
+async function autoFetchRemoteOnEnter(){
+  const cfg = await getSyncConfig();
+  if(!cfg || !cfg.url || !cfg.appKey) return; // sin configurar -> no hacer nada, silencioso
+  if(!navigator.onLine) return; // sin internet -> no interrumpir, se puede usar el botón manual
+  if(Date.now() - lastAutoFetchAt < 60000) return; // evita repetir si entra/sale rápido de la pestaña
+  lastAutoFetchAt = Date.now();
+  const r = await fetchRemoteList();
+  if(r.ok) loadHistory(); // solo refresca la lista si de verdad trajo algo nuevo, sin toast (silencioso)
+}
 async function remoteRowHTML(item){
   const fecha = item.fecha || '—';
   const equipo = item.equipo || item.modelo || 'Equipo';
@@ -3694,7 +3702,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v23'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v27'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
