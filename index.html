@@ -3658,61 +3658,86 @@ async function generarInformePDF(){
   doc.text(`Marca: ${marca}   Modelo: ${modelo}   N° Serie: ${serie}`, marginX, y); y += 5;
   doc.text(`N° Interno/Placa: ${interno}   Ubicación: ${ubicacion}   Horómetro actual: ${horometro}`, marginX, y); y += 6;
 
-  // 3. Verificación de componentes
-  const evaluados = [];
-  itemsForServicio(currentServicio).forEach(sec => {
-    sec.items.forEach((rawItem, i) => {
+  // 3. Detalle de la intervención: checklist + repuestos programados, en el MISMO orden
+  // que aparecen en la app real (Seguridad → Repuestos programados → Componentes → Puesta en
+  // marcha), cada ítem con su resultado y su foto justo debajo — no separado al final.
+  y = pdfSectionTitle(doc, y, marginX, '3. DETALLE DE LA INTERVENCIÓN');
+
+  async function renderDetalleItem(texto, resultadoTxt, colorRGB, obs, fotos){
+    y = pdfEnsureSpace(doc, y, 10);
+    doc.setFont('helvetica','bold'); doc.setFontSize(8.5);
+    const anchoTexto = pageW - marginX*2 - 34;
+    const lineasTexto = doc.splitTextToSize(texto, anchoTexto);
+    doc.text(lineasTexto, marginX, y);
+    doc.setTextColor(colorRGB[0], colorRGB[1], colorRGB[2]);
+    doc.text(resultadoTxt, pageW - marginX, y, { align: 'right' });
+    doc.setTextColor(0,0,0); doc.setFont('helvetica','normal');
+    y += lineasTexto.length * 4;
+    if(obs){
+      doc.setFontSize(8); doc.setTextColor(100);
+      const lineasObs = doc.splitTextToSize(obs, anchoTexto);
+      y = pdfEnsureSpace(doc, y, lineasObs.length*3.8);
+      doc.text(lineasObs, marginX, y); y += lineasObs.length*3.8;
+      doc.setTextColor(0,0,0);
+    }
+    if(fotos && fotos.length){
+      const imgW = 55, gap = 4;
+      let x = marginX, rowMaxH = 0;
+      y += 2;
+      for(const photoUrl of fotos){
+        const dims = await getImageDims(photoUrl);
+        const imgH = Math.min(imgW * (dims.height/dims.width), 60);
+        if(x + imgW > pageW - marginX){ x = marginX; y += rowMaxH + gap; rowMaxH = 0; }
+        y = pdfEnsureSpace(doc, y, imgH + gap);
+        try{ doc.addImage(photoUrl, 'JPEG', x, y, imgW, imgH); }catch(err){ /* imagen inválida, se omite sin romper el resto */ }
+        x += imgW + gap;
+        rowMaxH = Math.max(rowMaxH, imgH);
+      }
+      y += rowMaxH + 3;
+    }
+    y += 3;
+    doc.setDrawColor(225); doc.line(marginX, y-2, pageW-marginX, y-2); doc.setDrawColor(0);
+  }
+
+  const RESULTADO_COLOR = { bueno:[46,125,50], regular:[230,150,10], malo:[190,40,40], na:[130,130,130], realizado:[46,125,50], no_realizado:[190,40,40] };
+  let huboDetalle = false;
+  const planSnapshot = plannedSnapshot || buildPlannedSnapshot(equipoSel);
+  const tienePlan = equipoSel && getMaintenanceKey(equipoSel) && planSnapshot && planSnapshot.items;
+
+  for(const sec of itemsForServicio(currentServicio)){
+    for(let i=0; i<sec.items.length; i++){
+      const rawItem = sec.items[i];
       const key = itemKey(sec.key, i);
       const st = itemState[key];
-      if(st && (st.status === 'bueno' || st.status === 'regular' || st.status === 'malo')){
-        evaluados.push({ seccion: sec.title, texto: itemTexto(rawItem), tipo: itemTipo(rawItem), status: st.status, criticidad: st.criticidad, obs: st.obs, photos: photoState[key]||[] });
+      if(!st || !st.status) continue;
+      huboDetalle = true;
+      const label = labelParaValor(itemTipo(rawItem), st.status);
+      const color = RESULTADO_COLOR[st.status] || [0,0,0];
+      await renderDetalleItem(itemTexto(rawItem), label, color, st.obs, photoState[key]);
+    }
+    // los repuestos programados se muestran justo después de "Seguridad y Bloqueo",
+    // igual que aparecen en la app real (antes de la inspección de componentes)
+    if(sec.key === 'seguridad' && tienePlan){
+      for(let i=0; i<planSnapshot.items.length; i++){
+        const it = planSnapshot.items[i];
+        const aid = activityId(equipoSel, it, it.tier === 'CONDICION' ? 'c'+i : i);
+        const st = plannedState[aid];
+        if(!st || !st.status) continue;
+        huboDetalle = true;
+        const label = st.status === 'realizado' ? 'REALIZADO' : st.status === 'no_realizado' ? 'NO REALIZADO' : 'N/A';
+        const color = RESULTADO_COLOR[st.status] || [0,0,0];
+        await renderDetalleItem('Cambio de ' + (it.componente||''), label, color, st.obs, photoState[aid]);
       }
-    });
-  });
-  y = pdfSectionTitle(doc, y, marginX, '3. VERIFICACIÓN DE COMPONENTES');
-  if(evaluados.length){
-    doc.autoTable({
-      startY: y, margin: { left: marginX, right: marginX },
-      head: [['Componente','Estado','Criticidad','Observaciones']],
-      body: evaluados.map(e => [e.texto, labelParaValor(e.tipo, e.status), (e.status==='malo'&&e.criticidad)?e.criticidad.toUpperCase():'—', e.obs||'—']),
-      styles: { fontSize: 8, cellPadding: 2, valign: 'top' },
-      headStyles: { fillColor: [42,58,74] },
-      columnStyles: { 0: { cellWidth: 62 }, 1: { cellWidth: 20 }, 2: { cellWidth: 20 } },
-    });
-    y = doc.lastAutoTable.finalY + 6;
-  } else {
-    doc.setFontSize(9); doc.setTextColor(120); doc.text('Sin componentes evaluados con hallazgo.', marginX, y); doc.setTextColor(0); y += 8;
-  }
-
-  // 4. Actividades / repuestos programados
-  const planSnapshot = plannedSnapshot || buildPlannedSnapshot(equipoSel);
-  if(equipoSel && getMaintenanceKey(equipoSel) && planSnapshot && planSnapshot.items){
-    y = pdfSectionTitle(doc, y, marginX, `4. ACTIVIDADES / REPUESTOS PROGRAMADOS (${planSnapshot.intervalo || ''})`);
-    const filasPlan = [];
-    planSnapshot.items.forEach((it, i) => {
-      const aid = activityId(equipoSel, it, it.tier === 'CONDICION' ? 'c'+i : i);
-      const st = plannedState[aid];
-      if(!st || !st.status) return;
-      const lbl = st.status === 'realizado' ? 'REALIZADO' : st.status === 'no_realizado' ? 'NO REALIZADO' : 'N/A';
-      filasPlan.push(['Cambio de ' + (it.componente||''), lbl, st.obs||'—']);
-    });
-    if(filasPlan.length){
-      doc.autoTable({
-        startY: y, margin: { left: marginX, right: marginX },
-        head: [['Actividad','Resultado','Observación']],
-        body: filasPlan,
-        styles: { fontSize: 8, cellPadding: 2 },
-        headStyles: { fillColor: [42,58,74] },
-      });
-      y = doc.lastAutoTable.finalY + 6;
-    } else {
-      doc.setFontSize(9); doc.setTextColor(120); doc.text('Sin actividades marcadas.', marginX, y); doc.setTextColor(0); y += 8;
     }
   }
+  if(!huboDetalle){
+    doc.setFontSize(9); doc.setTextColor(120); doc.text('Sin ítems evaluados.', marginX, y); doc.setTextColor(0); y += 8;
+  }
+  y += 3;
 
-  // 5. Repuestos y materiales utilizados
+  // 4. Repuestos y materiales utilizados
   const rUsados = repuestosUsados.filter(r => (r.descripcion||'').trim());
-  y = pdfSectionTitle(doc, y, marginX, '5. REPUESTOS Y MATERIALES UTILIZADOS');
+  y = pdfSectionTitle(doc, y, marginX, '4. REPUESTOS Y MATERIALES UTILIZADOS');
   if(rUsados.length){
     doc.autoTable({
       startY: y, margin: { left: marginX, right: marginX },
@@ -3726,33 +3751,8 @@ async function generarInformePDF(){
     doc.setFontSize(9); doc.setTextColor(120); doc.text('Sin repuestos registrados.', marginX, y); doc.setTextColor(0); y += 8;
   }
 
-  // 6. Registro fotográfico
-  y = pdfSectionTitle(doc, y, marginX, '6. REGISTRO FOTOGRÁFICO');
-  const conFotos = evaluados.filter(e => e.photos.length);
-  if(conFotos.length){
-    const imgW = 55, gap = 4;
-    for(const e of conFotos){
-      y = pdfEnsureSpace(doc, y, 10);
-      doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.text(e.texto, marginX, y); y += 4.5;
-      doc.setFont('helvetica','normal');
-      let x = marginX, rowMaxH = 0;
-      for(const photoUrl of e.photos){
-        const dims = await getImageDims(photoUrl);
-        const imgH = Math.min(imgW * (dims.height/dims.width), 65);
-        if(x + imgW > pageW - marginX){ x = marginX; y += rowMaxH + gap; rowMaxH = 0; }
-        y = pdfEnsureSpace(doc, y, imgH + gap);
-        try{ doc.addImage(photoUrl, 'JPEG', x, y, imgW, imgH); }catch(e){ /* si la imagen no es JPEG valido, se omite sin romper el resto */ }
-        x += imgW + gap;
-        rowMaxH = Math.max(rowMaxH, imgH);
-      }
-      y += rowMaxH + 7;
-    }
-  } else {
-    doc.setFontSize(9); doc.setTextColor(120); doc.text('Sin fotografías adjuntas.', marginX, y); doc.setTextColor(0); y += 8;
-  }
-
   // 7. Observaciones, hallazgos y recomendaciones
-  y = pdfSectionTitle(doc, y, marginX, '7. OBSERVACIONES, HALLAZGOS Y RECOMENDACIONES');
+  y = pdfSectionTitle(doc, y, marginX, '5. OBSERVACIONES, HALLAZGOS Y RECOMENDACIONES');
   doc.setFontSize(9);
   if(hallazgos){
     const lineas = doc.splitTextToSize(hallazgos, pageW - marginX*2);
@@ -3764,7 +3764,7 @@ async function generarInformePDF(){
 
   // 8. Repuestos recomendados próxima mantención
   const rRec = repuestosRec.filter(r => (r.descripcion||'').trim());
-  y = pdfSectionTitle(doc, y, marginX, '8. REPUESTOS E INSUMOS RECOMENDADOS PARA PRÓXIMAS MANTENCIONES');
+  y = pdfSectionTitle(doc, y, marginX, '6. REPUESTOS E INSUMOS RECOMENDADOS PARA PRÓXIMAS MANTENCIONES');
   if(rRec.length){
     doc.autoTable({
       startY: y, margin: { left: marginX, right: marginX },
@@ -3779,7 +3779,7 @@ async function generarInformePDF(){
   }
 
   // 9. Entrega del equipo a Operaciones
-  y = pdfSectionTitle(doc, y, marginX, '9. ENTREGA DEL EQUIPO A OPERACIONES');
+  y = pdfSectionTitle(doc, y, marginX, '7. ENTREGA DEL EQUIPO A OPERACIONES');
   doc.autoTable({
     startY: y, margin: { left: marginX, right: marginX },
     head: [['Ítem','Estado']],
@@ -4020,7 +4020,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v41'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v42'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
