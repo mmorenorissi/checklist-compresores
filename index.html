@@ -1008,6 +1008,23 @@ const EQUIPOS_DEFAULT = [
   { id:'EQ32', categoria:'portatil', nombre:'COMP.N°7 (Ripios)', marca:'Atlas Copco', modelo:'XAS-400', serie:'WUP153316', interno:'', area:'Ripios', ubicacion:'BOTADERO DE RIPIOS' }
 ];
 
+// Tipos de respuesta por ítem — permite que preguntas de sí/no o legibilidad
+// no se contesten con Bueno/Regular/Malo (que no calza semánticamente con
+// preguntas de "¿se hizo esto?"). El valor GUARDADO sigue siendo bueno/malo/na
+// internamente (para que el resto de la lógica de la app no cambie), solo
+// cambia la ETIQUETA que ve el técnico en el botón.
+const RESPUESTA_TIPOS = {
+  estado:  [ {label:'BUENO', val:'bueno'}, {label:'REGULAR', val:'regular'}, {label:'MALO', val:'malo'}, {label:'N/A', val:'na'} ],
+  si_no:   [ {label:'SÍ', val:'bueno'}, {label:'NO', val:'malo'}, {label:'N/A', val:'na'} ],
+  legible: [ {label:'LEGIBLE', val:'bueno'}, {label:'NO LEGIBLE', val:'malo'}, {label:'N/A', val:'na'} ],
+};
+function itemTexto(it){ return typeof it === 'string' ? it : it.texto; }
+function itemTipo(it){ return typeof it === 'string' ? 'estado' : (it.tipo || 'estado'); }
+function labelParaValor(tipo, val){
+  const opt = (RESPUESTA_TIPOS[tipo] || RESPUESTA_TIPOS.estado).find(o => o.val === val);
+  return opt ? opt.label : (val ? val.toUpperCase() : '—');
+}
+
 const CRITICIDADES = [
   { v:'critica', label:'Crítica' },
   { v:'alta', label:'Alta' },
@@ -1623,11 +1640,11 @@ function parseIntervaloHoras(str){
 }
 
 const MTTO_SEGURIDAD = [
-  'Bloqueo/etiquetado (LOTO) aplicado antes de intervenir.',
-  'Registro en libro de bloqueo completado.',
-  'Registro de segregación del área realizado.',
+  { texto: 'Bloqueo/etiquetado (LOTO) aplicado antes de intervenir.', tipo: 'si_no' },
+  { texto: 'Registro en libro de bloqueo completado.', tipo: 'si_no' },
+  { texto: 'Registro de segregación del área realizado.', tipo: 'si_no' },
   'Estado inicial del equipo registrado (fotografía antes de intervenir).',
-  'Placa de identificación / N° de serie fotografiada.',
+  { texto: 'Placa de identificación / N° de serie fotografiada.', tipo: 'legible' },
 ];
 const MTTO_COMPONENTES_COMUN = [
   'Correas y poleas: tensión, alineación y desgaste (inspección, salvo cambio indicado arriba).',
@@ -1673,7 +1690,8 @@ function buildMttoPauta(){
   const equipo = equipos.find(e => e.id === equipoId);
   const intervaloStr = document.getElementById('f_intervalo') ? document.getElementById('f_intervalo').value : '';
   const intervaloNum = parseIntervaloHoras(intervaloStr);
-  const ref = equipo ? getReferenciaEquipo(equipo) : null;
+  const tieneRepuestosReales = equipo && !!getMaintenanceKey(equipo); // ya se muestran en "Repuestos y actividades programadas"
+  const ref = (equipo && !tieneRepuestosReales) ? getReferenciaEquipo(equipo) : null;
 
   const especificaItems = [];
   const vistos = new Set();
@@ -1684,7 +1702,7 @@ function buildMttoPauta(){
       t.items.forEach(it => { if(!vistos.has(it)){ vistos.add(it); especificaItems.push(it); } });
     });
   }
-  if(!especificaItems.length){
+  if(!ref && !tieneRepuestosReales){
     MTTO_GENERICO_FALLBACK.forEach(it => especificaItems.push(it));
   }
 
@@ -1693,9 +1711,14 @@ function buildMttoPauta(){
 
   const secciones = [
     { key:'seguridad', title:'SEGURIDAD Y BLOQUEO', items: MTTO_SEGURIDAD },
-    { key:'especifica', title: ref ? `MANTENCIÓN — ${ref.label.toUpperCase()}` : 'MANTENCIÓN — TAREAS GENÉRICAS (equipo sin referencia aún)', items: especificaItems },
-    { key:'componentes', title:'COMPONENTES Y CONEXIONES', items: componentesItems },
   ];
+  // la sección "especifica" (checklist genérico bueno/regular/malo) solo aparece si el equipo
+  // TODAVÍA no tiene datos reales de repuestos — si ya los tiene, sería preguntar dos veces
+  // por lo mismo (una vez aquí con bueno/malo, otra en "Repuestos programados" con realizado/no).
+  if(!tieneRepuestosReales){
+    secciones.push({ key:'especifica', title: ref ? `MANTENCIÓN — ${ref.label.toUpperCase()}` : 'MANTENCIÓN — TAREAS GENÉRICAS (equipo sin referencia aún)', items: especificaItems });
+  }
+  secciones.push({ key:'componentes', title:'INSPECCIÓN DE COMPONENTES Y CONEXIONES', items: componentesItems });
   if(equipo && equipo.categoria === 'portatil'){
     secciones.push({ key:'estructura', title:'ESTRUCTURA Y MOVILIDAD (PORTÁTIL)', items: MTTO_ESTRUCTURA_PORTATIL });
   }
@@ -2131,7 +2154,7 @@ function renderPlannedMaintenance(equipo, snapshotOverride){
     const pnClass = item.numeroParte ? '' : 'pendiente';
     return `
       <div class="plan-item" data-aid="${esc(aid)}">
-        <div class="comp">${esc(item.componente || 'Repuesto')}</div>
+        <div class="comp">Cambio de ${esc(item.componente || 'repuesto')}</div>
         <div class="pn ${pnClass}">PN: ${esc(pnTxt)}${item.codigoSap ? ' · SAP: '+esc(item.codigoSap) : ''} · Cant.: ${item.cantidad != null ? esc(item.cantidad) : '—'}${item.unidad ? ' '+esc(item.unidad) : ''}</div>
         <div class="plan-row">
           <div class="plan-btn rea ${st.status==='realizado'?'sel':''}" data-status="realizado">REALIZADO</div>
@@ -2498,7 +2521,10 @@ function renderSections(){
     const doneCount = sec.items.filter((_,i)=>itemState[itemKey(sec.key,i)].status).length;
     card.innerHTML = `<div class="section-bar"><span>${esc(sec.title)}</span><span class="count">${doneCount}/${sec.items.length}</span></div>`;
     const body = document.createElement('div');
-    sec.items.forEach((text, i) => {
+    sec.items.forEach((rawItem, i) => {
+      const text = itemTexto(rawItem);
+      const tipo = itemTipo(rawItem);
+      const opciones = RESPUESTA_TIPOS[tipo] || RESPUESTA_TIPOS.estado;
       const key = itemKey(sec.key, i);
       const st = itemState[key];
       const sinFoto = st.status === 'malo' && (!photoState[key] || !photoState[key].length);
@@ -2507,11 +2533,8 @@ function renderSections(){
       div.dataset.key = key;
       div.innerHTML = `
         <div class="item-text"><span class="idx">${i+1}</span><span>${esc(text)}</span></div>
-        <div class="status-row">
-          <div class="status-btn bueno ${st.status==='bueno'?'sel':''}" data-status="bueno">BUENO</div>
-          <div class="status-btn regular ${st.status==='regular'?'sel':''}" data-status="regular">REGULAR</div>
-          <div class="status-btn malo ${st.status==='malo'?'sel':''}" data-status="malo">MALO</div>
-          <div class="status-btn na ${st.status==='na'?'sel':''}" data-status="na">N/A</div>
+        <div class="status-row" ${opciones.length !== 4 ? `style="grid-template-columns:repeat(${opciones.length}, 1fr);"` : ''}>
+          ${opciones.map(o => `<div class="status-btn ${o.val} ${st.status===o.val?'sel':''}" data-status="${o.val}">${esc(o.label)}</div>`).join('')}
         </div>
         ${st.status === 'malo' ? `
         <div class="field" style="margin-bottom:8px;">
@@ -2757,7 +2780,7 @@ function buildPlannedSnapshot(equipoSel){
 function buildItemsDescriptivos(){
   const mapa = {};
   itemsForServicio(currentServicio).forEach(sec => {
-    sec.items.forEach((texto, i) => { mapa[itemKey(sec.key, i)] = { seccion: sec.title, texto }; });
+    sec.items.forEach((rawItem, i) => { mapa[itemKey(sec.key, i)] = { seccion: sec.title, texto: itemTexto(rawItem), tipo: itemTipo(rawItem) }; });
   });
   return mapa;
 }
@@ -3105,7 +3128,8 @@ async function openRemoteDetail(id){
         evaluadosEntries.forEach(([key, s]) => {
           const c = s.status==='malo' ? 'var(--malo)' : s.status==='regular' ? 'var(--regular)' : 'var(--bueno)';
           const texto = desc[key] ? desc[key].texto : key;
-          html += `<div style="padding:7px 0;border-top:1px solid var(--line);"><b style="color:${c};">[${s.status.toUpperCase()}]</b> ${esc(texto)}${s.obs ? '<br><span style="color:var(--muted);">'+esc(s.obs)+'</span>' : ''}</div>`;
+          const tipo = desc[key] ? (desc[key].tipo || 'estado') : 'estado';
+          html += `<div style="padding:7px 0;border-top:1px solid var(--line);"><b style="color:${c};">[${esc(labelParaValor(tipo, s.status))}]</b> ${esc(texto)}${s.obs ? '<br><span style="color:var(--muted);">'+esc(s.obs)+'</span>' : ''}</div>`;
         });
       }
       if(full.hallazgos) html += `<div style="margin-top:10px;padding:8px 10px;background:var(--paper);border-radius:8px;"><b>Hallazgos:</b> ${esc(full.hallazgos)}</div>`;
@@ -3576,11 +3600,11 @@ async function generarInformePDF(){
   // 3. Verificación de componentes
   const evaluados = [];
   itemsForServicio(currentServicio).forEach(sec => {
-    sec.items.forEach((text, i) => {
+    sec.items.forEach((rawItem, i) => {
       const key = itemKey(sec.key, i);
       const st = itemState[key];
       if(st && (st.status === 'bueno' || st.status === 'regular' || st.status === 'malo')){
-        evaluados.push({ seccion: sec.title, texto: text, status: st.status, criticidad: st.criticidad, obs: st.obs, photos: photoState[key]||[] });
+        evaluados.push({ seccion: sec.title, texto: itemTexto(rawItem), tipo: itemTipo(rawItem), status: st.status, criticidad: st.criticidad, obs: st.obs, photos: photoState[key]||[] });
       }
     });
   });
@@ -3589,7 +3613,7 @@ async function generarInformePDF(){
     doc.autoTable({
       startY: y, margin: { left: marginX, right: marginX },
       head: [['Componente','Estado','Criticidad','Observaciones']],
-      body: evaluados.map(e => [e.texto, statusLabelUpper(e.status), (e.status==='malo'&&e.criticidad)?e.criticidad.toUpperCase():'—', e.obs||'—']),
+      body: evaluados.map(e => [e.texto, labelParaValor(e.tipo, e.status), (e.status==='malo'&&e.criticidad)?e.criticidad.toUpperCase():'—', e.obs||'—']),
       styles: { fontSize: 8, cellPadding: 2, valign: 'top' },
       headStyles: { fillColor: [42,58,74] },
       columnStyles: { 0: { cellWidth: 62 }, 1: { cellWidth: 20 }, 2: { cellWidth: 20 } },
@@ -3609,7 +3633,7 @@ async function generarInformePDF(){
       const st = plannedState[aid];
       if(!st || !st.status) return;
       const lbl = st.status === 'realizado' ? 'REALIZADO' : st.status === 'no_realizado' ? 'NO REALIZADO' : 'N/A';
-      filasPlan.push([it.componente||'', lbl, st.obs||'—']);
+      filasPlan.push(['Cambio de ' + (it.componente||''), lbl, st.obs||'—']);
     });
     if(filasPlan.length){
       doc.autoTable({
@@ -3759,11 +3783,11 @@ function buildPrintArea(){
   // 3. Verificación de componentes — SOLO ítems con estado Bueno/Regular/Malo
   const evaluados = [];
   itemsForServicio(currentServicio).forEach(sec => {
-    sec.items.forEach((text, i) => {
+    sec.items.forEach((rawItem, i) => {
       const key = itemKey(sec.key, i);
       const st = itemState[key];
       if(st && (st.status === 'bueno' || st.status === 'regular' || st.status === 'malo')){
-        evaluados.push({ seccion: sec.title, texto: text, status: st.status, criticidad: st.criticidad, obs: st.obs, photos: photoState[key]||[] });
+        evaluados.push({ seccion: sec.title, texto: itemTexto(rawItem), tipo: itemTipo(rawItem), status: st.status, criticidad: st.criticidad, obs: st.obs, photos: photoState[key]||[] });
       }
     });
   });
@@ -3922,7 +3946,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v35'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v36'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
