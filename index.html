@@ -901,6 +901,12 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         <button id="btnCambiarClaveEquipos" style="background:none;border:none;color:#8fa8c2;font-size:11px;">🔒 Cambiar clave</button>
       </div>
       <div id="equipList"></div>
+      <div class="card-pad" style="padding-top:0;">
+        <p style="font-size:11px;color:var(--muted);line-height:1.4;margin:0;background:var(--paper);border-radius:8px;padding:9px 11px;">
+          💾 Estos cambios se guardan solo en este teléfono. Si haces ediciones importantes (nombres, equipos nuevos, técnicos),
+          ve a <b>Historial → Respaldo JSON</b> y guarda una copia — así no se pierde nada aunque el teléfono borre datos algún día.
+        </p>
+      </div>
     </div>
     <div class="card">
       <div class="card-head"><h2 id="addEquipoCardTitle">Agregar equipo</h2></div>
@@ -1020,6 +1026,7 @@ const RESPUESTA_TIPOS = {
 };
 function itemTexto(it){ return typeof it === 'string' ? it : it.texto; }
 function itemTipo(it){ return typeof it === 'string' ? 'estado' : (it.tipo || 'estado'); }
+function itemFotoObligatoria(it){ return typeof it === 'string' ? false : !!it.fotoObligatoria; }
 function labelParaValor(tipo, val){
   const opt = (RESPUESTA_TIPOS[tipo] || RESPUESTA_TIPOS.estado).find(o => o.val === val);
   return opt ? opt.label : (val ? val.toUpperCase() : '—');
@@ -1643,8 +1650,8 @@ const MTTO_SEGURIDAD = [
   { texto: 'Bloqueo/etiquetado (LOTO) aplicado antes de intervenir.', tipo: 'si_no' },
   { texto: 'Registro en libro de bloqueo completado.', tipo: 'si_no' },
   { texto: 'Registro de segregación del área realizado.', tipo: 'si_no' },
-  'Estado inicial del equipo registrado (fotografía antes de intervenir).',
-  { texto: 'Placa de identificación / N° de serie fotografiada.', tipo: 'legible' },
+  { texto: 'Estado inicial del equipo registrado (fotografía antes de intervenir).', fotoObligatoria: true },
+  { texto: 'Placa de identificación / N° de serie fotografiada.', tipo: 'legible', fotoObligatoria: true },
 ];
 const MTTO_COMPONENTES_COMUN = [
   'Correas y poleas: tensión, alineación y desgaste (inspección, salvo cambio indicado arriba).',
@@ -1666,7 +1673,7 @@ const MTTO_PUESTA_MARCHA = [
   'Ausencia de fugas de aire y aceite verificada tras la presurización.',
   'Todas las protecciones y puertas laterales reinstaladas correctamente.',
   'Registro de entrega del equipo realizado.',
-  'Imagen general del área de trabajo (segregación retirada y housekeeping).',
+  { texto: 'Imagen general del área de trabajo (segregación retirada y housekeeping).', fotoObligatoria: true },
 ];
 // Fallback genérico si el equipo aún no tiene familia mapeada en REFERENCIA_MTTO
 const MTTO_GENERICO_FALLBACK = [
@@ -1955,20 +1962,17 @@ document.querySelectorAll('.tab').forEach(tab => {
 });
 document.getElementById('goHome').addEventListener('click', () => goToView('home'));
 
-let equiposUnlocked = false;
 async function verificarClaveEquipos(){
-  if(equiposUnlocked) return true;
   const pinGuardado = await storage.get('equipos_pin');
   if(!pinGuardado){
     const nueva = prompt('Aún no hay una clave configurada para esta sección.\nCrea una clave para proteger el maestro de equipos (técnicos, supervisores, altas/bajas):');
     if(!nueva || !nueva.trim()) return false;
     await storage.set('equipos_pin', nueva.trim());
-    equiposUnlocked = true;
     toast('✓ Clave creada — guárdala en un lugar seguro');
     return true;
   }
-  const intento = prompt('Ingresa la clave para acceder a Equipos:');
-  if(intento === pinGuardado){ equiposUnlocked = true; return true; }
+  const intento = prompt('Ingresa la clave para continuar:');
+  if(intento === pinGuardado) return true;
   if(intento !== null) toast('✕ Clave incorrecta');
   return false;
 }
@@ -2531,12 +2535,14 @@ function renderSections(){
       const opciones = RESPUESTA_TIPOS[tipo] || RESPUESTA_TIPOS.estado;
       const key = itemKey(sec.key, i);
       const st = itemState[key];
-      const sinFoto = st.status === 'malo' && (!photoState[key] || !photoState[key].length);
+      const tieneFotoObligatoria = itemFotoObligatoria(rawItem);
+      const sinFoto = !tieneFotoObligatoria && st.status === 'malo' && (!photoState[key] || !photoState[key].length);
+      const sinFotoSiempre = tieneFotoObligatoria && st.status && st.status !== 'na' && (!photoState[key] || !photoState[key].length);
       const div = document.createElement('div');
       div.className = 'item';
       div.dataset.key = key;
       div.innerHTML = `
-        <div class="item-text"><span class="idx">${i+1}</span><span>${esc(text)}</span></div>
+        <div class="item-text"><span class="idx">${i+1}</span><span>${esc(text)}${tieneFotoObligatoria ? ' <span style=\"color:var(--steel);font-size:11px;font-weight:700;\">📷 foto obligatoria</span>' : ''}</span></div>
         <div class="status-row" ${opciones.length !== 4 ? `style="grid-template-columns:repeat(${opciones.length}, 1fr);"` : ''}>
           ${opciones.map(o => `<div class="status-btn ${o.val} ${st.status===o.val?'sel':''}" data-status="${o.val}">${esc(o.label)}</div>`).join('')}
         </div>
@@ -2555,6 +2561,7 @@ function renderSections(){
           <div style="color:var(--malo);font-size:11.5px;font-weight:700;margin-bottom:5px;">📷 Sin foto — completa una justificación para poder guardar</div>
           <textarea class="just-textarea" placeholder="Justificación sin fotografía (obligatoria si no hay foto)…" style="width:100%;border:1.5px solid var(--malo-bg);border-radius:8px;padding:8px 10px;font-size:13px;">${esc(st.justSinFoto||'')}</textarea>
         </div>` : ''}
+        ${sinFotoSiempre ? `<div style="color:var(--malo);font-size:11.5px;font-weight:700;margin-top:9px;">📷 Este ítem requiere foto obligatoria — sube al menos una para poder guardar</div>` : ''}
       `;
       div.querySelectorAll('.status-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -2840,9 +2847,24 @@ function summarizeItems(items){
   return {bueno, regular, malo, criticoAlta};
 }
 function itemsSinEvidencia(){
-  return Object.entries(itemState).filter(([key, s]) =>
+  const faltantes = Object.entries(itemState).filter(([key, s]) =>
     s.status==='malo' && (!photoState[key] || !photoState[key].length) && !(s.justSinFoto && s.justSinFoto.trim())
   );
+  // ítems marcados con foto siempre obligatoria (ej. estado inicial, placa, imagen del área):
+  // necesitan foto sin importar qué estado se eligió, mientras no sea N/A — sin opción de
+  // justificar por escrito en su reemplazo, porque su función es justamente ser evidencia visual.
+  const yaListados = new Set(faltantes.map(([k]) => k));
+  itemsForServicio(currentServicio).forEach(sec => {
+    sec.items.forEach((rawItem, i) => {
+      if(!itemFotoObligatoria(rawItem)) return;
+      const key = itemKey(sec.key, i);
+      const s = itemState[key];
+      if(s && s.status && s.status !== 'na' && (!photoState[key] || !photoState[key].length) && !yaListados.has(key)){
+        faltantes.push([key, s]);
+      }
+    });
+  });
+  return faltantes;
 }
 function repuestosRealizadosSinFoto(){
   return Object.entries(plannedState).filter(([aid, s]) =>
@@ -2866,6 +2888,10 @@ async function saveRecord(){
     toast(`✕ Hay ${repuestosSinFoto.length} repuesto(s) marcados REALIZADO sin foto de evidencia. Sube al menos 1 foto por cada uno.`);
     const equipoActual = equipos.find(e => e.id === document.getElementById('f_equipo').value);
     renderPlannedMaintenance(equipoActual);
+    return false;
+  }
+  if(!document.getElementById('f_horometro').value.trim()){
+    toast('✕ Falta ingresar el horómetro del equipo.');
     return false;
   }
   const horaJustNecesaria = document.getElementById('horometroJustWrap').style.display !== 'none';
@@ -3275,6 +3301,11 @@ async function loadHistory(){
     );
   }
   const remotosFiltrados = remotos.filter(r => {
+    if(histFilter !== 'todos'){
+      const esInspeccion = (r.tipoServicio||'').toLowerCase().includes('inspecc');
+      const servicioRemoto = esInspeccion ? 'inspeccion' : 'mtto';
+      if(servicioRemoto !== histFilter) return false;
+    }
     if(histSearchTerm){
       const hay = (r.equipo||'').toLowerCase().includes(histSearchTerm) || (r.serie||'').toLowerCase().includes(histSearchTerm) || (r.nroInforme||'').toLowerCase().includes(histSearchTerm);
       if(!hay) return false;
@@ -3909,14 +3940,22 @@ async function exportBackup(){
   try{
     const rows = await storage.allEntries('registro:');
     const idx = (await storage.get('registros_index')) || [];
-    const payload = { app:'mantenimiento-compresores-ant', exportedAt:new Date().toISOString(), index:idx, records: rows.map(r=>r.value), equipos };
+    const syncCfg = await getSyncConfig();
+    const payload = {
+      app:'mantenimiento-compresores-ant', exportedAt:new Date().toISOString(),
+      index:idx, records: rows.map(r=>r.value),
+      equipos, tecnicos, supervisores,
+      syncConfig: syncCfg || null
+      // ojo: la clave de administrador (equipos_pin) NO se incluye a propósito —
+      // si compartes este archivo por correo/WhatsApp, no queda expuesta ahí.
+    };
     const blob = new Blob([JSON.stringify(payload,null,2)], {type:'application/json'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = `respaldo_compresores_ant_${todayISO()}.json`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    toast('✓ Respaldo descargado (' + rows.length + ' registros)');
+    toast('✓ Respaldo descargado (' + rows.length + ' registros + equipos + personal)');
   }catch(e){ console.error(e); toast('✕ Error al exportar'); }
 }
 function csvEscape(v){
@@ -3956,17 +3995,22 @@ async function importBackup(file){
   try{
     const payload = JSON.parse(await file.text());
     const records = payload.records || [];
-    if(!records.length){ toast('El archivo no tiene registros'); return; }
-    for(const rec of records) await storage.set('registro:' + rec.id, rec);
-    let idx = (await storage.get('registros_index')) || [];
-    records.forEach(rec => {
-      idx = idx.filter(x => x.id !== rec.id);
-      const counts = summarizeItems(rec.items);
-      idx.unshift({ id:rec.id, servicio:rec.servicio, equipoLabel:rec.interno||rec.modelo, marcaModelo:(rec.marca+' '+rec.modelo).trim(), serie:rec.serie, fecha:rec.fecha, savedAt:rec.savedAt, malo:counts.malo, bueno:counts.bueno });
-    });
-    await storage.set('registros_index', idx);
-    if(payload.equipos && payload.equipos.length){ equipos = payload.equipos; await saveEquipos(); }
-    toast('✓ Importados ' + records.length + ' registros');
+    if(records.length){
+      for(const rec of records) await storage.set('registro:' + rec.id, rec);
+      let idx = (await storage.get('registros_index')) || [];
+      records.forEach(rec => {
+        idx = idx.filter(x => x.id !== rec.id);
+        const counts = summarizeItems(rec.items);
+        idx.unshift({ id:rec.id, servicio:rec.servicio, equipoLabel:rec.equipoNombre||rec.interno||rec.modelo, marcaModelo:(rec.marca+' '+rec.modelo).trim(), serie:rec.serie, fecha:rec.fecha, savedAt:rec.savedAt, completadoPor:rec.completadoPor||'', malo:counts.malo, regular:counts.regular, bueno:counts.bueno });
+      });
+      await storage.set('registros_index', idx);
+    }
+    let restaurado = [];
+    if(payload.equipos && payload.equipos.length){ equipos = payload.equipos; await saveEquipos(); restaurado.push('equipos'); }
+    if(payload.tecnicos && payload.tecnicos.length){ tecnicos = payload.tecnicos; await saveTecnicos(); restaurado.push('técnicos'); }
+    if(payload.supervisores && payload.supervisores.length){ supervisores = payload.supervisores; await saveSupervisores(); restaurado.push('supervisores'); }
+    if(payload.syncConfig && payload.syncConfig.url){ await setSyncConfig(payload.syncConfig); restaurado.push('sincronización'); }
+    toast('✓ Restaurado: ' + records.length + ' registros' + (restaurado.length ? ' + ' + restaurado.join(', ') : ''));
     loadHistory();
   }catch(e){ console.error(e); toast('✕ Archivo de respaldo inválido'); }
 }
@@ -3976,7 +4020,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v39'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v41'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
