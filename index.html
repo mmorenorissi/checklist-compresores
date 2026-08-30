@@ -2152,6 +2152,7 @@ function renderPlannedMaintenance(equipo, snapshotOverride){
     const st = plannedState[aid] || { status:'', obs:'' };
     const pnTxt = item.numeroParte ? item.numeroParte : 'Pendiente de validar';
     const pnClass = item.numeroParte ? '' : 'pendiente';
+    const sinFoto = st.status === 'realizado' && (!photoState[aid] || !photoState[aid].length);
     return `
       <div class="plan-item" data-aid="${esc(aid)}">
         <div class="comp">Cambio de ${esc(item.componente || 'repuesto')}</div>
@@ -2162,6 +2163,8 @@ function renderPlannedMaintenance(equipo, snapshotOverride){
           <div class="plan-btn na ${st.status==='na'?'sel':''}" data-status="na">N/A</div>
         </div>
         <textarea placeholder="Observación (ej: sin stock, se pospone)…">${esc(st.obs||'')}</textarea>
+        <div class="photo-row" style="margin-top:8px;"></div>
+        ${sinFoto ? `<div style="color:var(--malo);font-size:11px;font-weight:700;margin-top:5px;">📷 Falta al menos 1 foto de evidencia del cambio realizado</div>` : ''}
       </div>`;
   }
 
@@ -2195,6 +2198,7 @@ function renderPlannedMaintenance(equipo, snapshotOverride){
       });
     });
     div.querySelector('textarea').addEventListener('input', (e) => { plannedState[aid].obs = e.target.value; });
+    renderPhotos(div.querySelector('.photo-row'), aid, () => renderPlannedMaintenance(equipo));
   });
 }
 
@@ -2573,25 +2577,27 @@ function renderSections(){
   });
 }
 
-function renderPhotos(container, key){
+function renderPhotos(container, key, onChange){
+  onChange = onChange || renderSections;
   container.innerHTML = '';
   (photoState[key]||[]).forEach((src, idx) => {
     const t = document.createElement('div');
     t.className = 'thumb';
     t.innerHTML = `<img src="${src}"><div class="rm">✕</div>`;
     t.querySelector('img').addEventListener('click', () => openPhotoModal(src));
-    t.querySelector('.rm').addEventListener('click', (e) => { e.stopPropagation(); photoState[key].splice(idx,1); renderSections(); });
+    t.querySelector('.rm').addEventListener('click', (e) => { e.stopPropagation(); photoState[key].splice(idx,1); onChange(); });
     container.appendChild(t);
   });
   const add = document.createElement('label');
   add.className = 'add-photo';
   add.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="14" r="3.2"/></svg>Foto
     <input type="file" accept="image/*" multiple style="display:none;">`;
-  add.querySelector('input').addEventListener('change', (e) => handlePhotoFiles(e.target.files, key, container));
+  add.querySelector('input').addEventListener('change', (e) => handlePhotoFiles(e.target.files, key, container, onChange));
   container.appendChild(add);
 }
 
-function handlePhotoFiles(files, key, container){
+function handlePhotoFiles(files, key, container, onChange){
+  onChange = onChange || renderSections;
   let pending = files.length;
   [...files].forEach(file => {
     const reader = new FileReader();
@@ -2607,7 +2613,7 @@ function handlePhotoFiles(files, key, container){
         photoState[key] = photoState[key] || [];
         photoState[key].push(dataUrl);
         pending--;
-        if(pending <= 0) renderSections(); else renderPhotos(container, key);
+        if(pending <= 0) onChange(); else renderPhotos(container, key, onChange);
       };
       img.src = ev.target.result;
     };
@@ -2838,6 +2844,11 @@ function itemsSinEvidencia(){
     s.status==='malo' && (!photoState[key] || !photoState[key].length) && !(s.justSinFoto && s.justSinFoto.trim())
   );
 }
+function repuestosRealizadosSinFoto(){
+  return Object.entries(plannedState).filter(([aid, s]) =>
+    s && s.status === 'realizado' && (!photoState[aid] || !photoState[aid].length)
+  );
+}
 async function saveRecord(){
   const pendientes = Object.values(itemState).filter(s => !s.status).length;
   if(pendientes){
@@ -2848,6 +2859,13 @@ async function saveRecord(){
   if(sinEvidencia.length){
     toast(`✕ Hay ${sinEvidencia.length} ítem(s) MALO sin foto ni justificación. Completa uno de los dos para guardar.`);
     renderSections();
+    return false;
+  }
+  const repuestosSinFoto = repuestosRealizadosSinFoto();
+  if(repuestosSinFoto.length){
+    toast(`✕ Hay ${repuestosSinFoto.length} repuesto(s) marcados REALIZADO sin foto de evidencia. Sube al menos 1 foto por cada uno.`);
+    const equipoActual = equipos.find(e => e.id === document.getElementById('f_equipo').value);
+    renderPlannedMaintenance(equipoActual);
     return false;
   }
   const horaJustNecesaria = document.getElementById('horometroJustWrap').style.display !== 'none';
@@ -2973,7 +2991,11 @@ async function subirPdfRemoto(rec){
   try{
     const doc = await generarInformePDF();
     const base64 = doc.output('datauristring');
-    const filename = (rec.ninforme || rec.id) + '.pdf';
+    const filename = formatFilenamePDF({
+      servicio: rec.servicio, intervalo: rec.intervalo,
+      equipoNombre: rec.equipoNombre || rec.interno || rec.modelo || 'Equipo',
+      fecha: rec.fecha
+    });
     const body = new URLSearchParams();
     body.set('action', 'guardarpdf');
     body.set('key', cfg.appKey);
@@ -3273,6 +3295,7 @@ async function loadHistory(){
   list.querySelectorAll('[data-remote]').forEach(el => el.addEventListener('click', () => openRemoteDetail(el.dataset.remote)));
   list.querySelectorAll('[data-del]').forEach(el => el.addEventListener('click', async (e) => {
     e.stopPropagation();
+    if(!(await verificarClaveEquipos())) return; // misma clave que protege Equipos
     if(confirm('¿Eliminar este registro?')){ await deleteRecord(el.dataset.del); loadHistory(); }
   }));
 }
@@ -3452,19 +3475,25 @@ document.getElementById('btnDelete').addEventListener('click', async () => {
     goToView('history');
   }
 });
-function buildInformeFilename(){
-  const servicioLabel = currentServicio === 'inspeccion' ? 'Inspección' : 'Mantención';
-  const equipoSel = equipos.find(e => e.id === document.getElementById('f_equipo').value);
-  const modelo = equipoSel ? equipoSel.modelo : (document.getElementById('f_modelo').value || 'Equipo');
-  const intervalo = currentServicio === 'mtto' ? document.getElementById('f_intervalo').value.replace(/[.\s]/g,'') : '';
-  const fechaRaw = document.getElementById('f_fecha').value;
-  let fechaFmt = fechaRaw;
-  if(fechaRaw && /^\d{4}-\d{2}-\d{2}$/.test(fechaRaw)){
-    const [y,m,d] = fechaRaw.split('-');
+function formatFilenamePDF({ servicio, intervalo, equipoNombre, fecha }){
+  const servicioLabel = servicio === 'inspeccion' ? 'Inspección' : 'Mantención';
+  const intervaloClean = (servicio === 'mtto' && intervalo) ? String(intervalo).replace(/[.\s]/g,'') : '';
+  let fechaFmt = fecha;
+  if(fecha && /^\d{4}-\d{2}-\d{2}$/.test(fecha)){
+    const [y,m,d] = fecha.split('-');
     fechaFmt = `${d}-${m}-${y}`; // se usa guion, no "/" — la barra no es válida en nombres de archivo
   }
-  const partes = [servicioLabel, intervalo, modelo, fechaFmt].filter(Boolean);
+  const partes = [servicioLabel, intervaloClean, equipoNombre, fechaFmt].filter(Boolean);
   return partes.join(' ').replace(/[\\/:*?"<>|]/g, '-') + '.pdf';
+}
+function buildInformeFilename(){
+  const equipoSel = equipos.find(e => e.id === document.getElementById('f_equipo').value);
+  return formatFilenamePDF({
+    servicio: currentServicio,
+    intervalo: document.getElementById('f_intervalo').value,
+    equipoNombre: equipoSel ? equipoSel.nombre : (document.getElementById('f_interno').value || 'Equipo'), // nombre, no modelo -> distingue entre unidades del mismo modelo
+    fecha: document.getElementById('f_fecha').value
+  });
 }
 
 document.getElementById('btnPrint').addEventListener('click', async () => {
@@ -3946,7 +3975,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v36'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v37'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
