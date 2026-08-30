@@ -2907,7 +2907,7 @@ async function updateIndex(rec){
   const counts = summarizeItems(rec.items);
   idx.unshift({
     id: rec.id, servicio: rec.servicio, equipoLabel: rec.equipoNombre || rec.interno || rec.modelo, marcaModelo: (rec.marca+' '+rec.modelo).trim(),
-    serie: rec.serie, ninforme: rec.ninforme, equipoId: rec.equipoId, fecha: rec.fecha, savedAt: rec.savedAt,
+    serie: rec.serie, ninforme: rec.ninforme, equipoId: rec.equipoId, fecha: rec.fecha, savedAt: rec.savedAt, completadoPor: rec.completadoPor || '',
     malo: counts.malo, regular: counts.regular, bueno: counts.bueno, criticoAlta: counts.criticoAlta, syncStatus: rec.syncStatus || 'local', pdfUrl: rec.pdfUrl || null
   });
   await storage.set('registros_index', idx);
@@ -3235,7 +3235,7 @@ function historyRowHTML(item){
     <div class="hist-badge ${cls==='malo'?'malo':cls==='regular'?'regular':'bueno'}" style="${cls==='regular'?'background:var(--regular);':''}">${esc(badgeText)}</div>
     <div class="hist-main">
       <div class="t1">${esc(item.equipoLabel || item.marcaModelo || 'Equipo')} ${syncIcon} ${pdfIcon}</div>
-      <div class="t2">${esc(servicioLabel)} · ${esc(item.fecha||'—')} · ${esc(item.serie||'')}</div>
+      <div class="t2">${esc(servicioLabel)} · ${esc(item.fecha||'—')} · ${esc(item.completadoPor || '—')}</div>
     </div>
     <div class="hist-chip" style="${cls==='malo'?'background:var(--malo-bg);color:var(--malo);':cls==='regular'?'background:var(--regular-bg);color:var(--regular);':'background:var(--bueno-bg);color:var(--bueno);'}">${esc(chipText)}</div>
   </div>`;
@@ -3470,6 +3470,7 @@ function toast(msg){
 document.getElementById('btnSave').addEventListener('click', saveRecord);
 document.getElementById('btnDelete').addEventListener('click', async () => {
   if(!currentId) return;
+  if(!(await verificarClaveEquipos())) return; // misma clave que protege Equipos
   if(confirm('¿Eliminar este registro guardado? No se puede deshacer.')){
     await deleteRecord(currentId);
     goToView('history');
@@ -3975,7 +3976,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v37'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v38'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
