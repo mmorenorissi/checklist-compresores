@@ -4072,10 +4072,20 @@ async function loadEquipos(){
   if(!saved || !saved.length){
     equipos = JSON.parse(JSON.stringify(EQUIPOS_DEFAULT));
   } else if(savedVersion < EQUIPOS_DEFAULT_VERSION){
-    // fusiona: saca placeholders obsoletos conocidos, conserva el resto (incl. equipos agregados a mano), suma los nuevos que falten
+    // fusiona: saca placeholders obsoletos conocidos, actualiza los datos de los equipos
+    // que ya existen (el maestro central manda), y suma los nuevos que falten.
+    // lo que NO está en EQUIPOS_DEFAULT (ej. algo agregado a mano en este teléfono
+    // y aún no documentado en el código) se conserva tal cual, no se borra.
     let base = saved.filter(e => !OBSOLETE_IDS_V2.includes(e.id));
-    const existingIds = new Set(base.map(e => e.id));
-    EQUIPOS_DEFAULT.forEach(def => { if(!existingIds.has(def.id)) base.push(JSON.parse(JSON.stringify(def))); });
+    const porId = new Map(base.map(e => [e.id, e]));
+    EQUIPOS_DEFAULT.forEach(def => {
+      const existente = porId.get(def.id);
+      if(existente){
+        Object.assign(existente, JSON.parse(JSON.stringify(def)));
+      } else {
+        base.push(JSON.parse(JSON.stringify(def)));
+      }
+    });
     equipos = base;
   } else {
     equipos = saved;
@@ -6305,7 +6315,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v45'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v46'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
