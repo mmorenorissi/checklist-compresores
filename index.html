@@ -5607,6 +5607,7 @@ function renderEquipList(){
           <div class="t2">${esc(e.marca)} ${esc(e.modelo)} · ${esc(e.serie||'sin serie')} · ${esc(e.area||'')}</div>
         </div>
         <button class="hist-del" data-verqr="${esc(e.id)}" style="background:var(--na-bg);color:var(--steel);margin-right:6px;">📱</button>
+        <button class="hist-del" data-editeq="${esc(e.id)}" style="background:var(--safety);color:var(--safety-ink);margin-right:6px;">✏️</button>
         <button class="hist-del" data-rmeq="${esc(e.id)}">🗑</button>
       </div>`;
     });
@@ -5616,6 +5617,10 @@ function renderEquipList(){
   box.querySelectorAll('[data-verqr]').forEach(btn => btn.addEventListener('click', (e) => {
     e.stopPropagation();
     mostrarModalQR(btn.dataset.verqr);
+  }));
+  box.querySelectorAll('[data-editeq]').forEach(btn => btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    startEditEquipo(btn.dataset.editeq);
   }));
   box.querySelectorAll('[data-rmeq]').forEach(btn => btn.addEventListener('click', async (e) => {
     e.stopPropagation();
@@ -6300,7 +6305,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v44'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v45'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
