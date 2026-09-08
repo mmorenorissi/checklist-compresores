@@ -3077,7 +3077,6 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
     <div class="card">
       <div class="card-head" style="display:flex;justify-content:space-between;align-items:center;">
         <h2>Maestro de equipos</h2>
-        <button id="btnCambiarClaveEquipos" style="background:none;border:none;color:#8fa8c2;font-size:11px;">🔒 Cambiar clave</button>
       </div>
       <div id="equipList"></div>
       <div class="card-pad" style="padding-top:0;">
@@ -4062,6 +4061,7 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, m => ({'&':'&am
 function todayISO(){ return new Date().toISOString().slice(0,10); }
 function nowTimeHHMM(){ const d=new Date(); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
 
+const EQUIPOS_PIN = '1987'; // clave fija del maestro de equipos (técnicos, supervisores, altas/bajas) — la cambia solo Mario, aquí en el código
 const EQUIPOS_DEFAULT_VERSION = 2; // subir en 1 cada vez que EQUIPOS_DEFAULT cambie
 // IDs de la versión anterior (placeholder, con datos incompletos) que se reemplazan por los reales del archivo de control.
 const OBSOLETE_IDS_V2 = ['PORT-N3','PORT-N4','PORT-N5','PORT-N6','PORT-N7','EST-CSD105-1','EST-CSD105-2','EST-ASD40-1','EST-ASD40-2','EST-ASD40-3','EST-CSDX165'];
@@ -4152,16 +4152,8 @@ document.querySelectorAll('.tab').forEach(tab => {
 document.getElementById('goHome').addEventListener('click', () => goToView('home'));
 
 async function verificarClaveEquipos(){
-  const pinGuardado = await storage.get('equipos_pin');
-  if(!pinGuardado){
-    const nueva = prompt('Aún no hay una clave configurada para esta sección.\nCrea una clave para proteger el maestro de equipos (técnicos, supervisores, altas/bajas):');
-    if(!nueva || !nueva.trim()) return false;
-    await storage.set('equipos_pin', nueva.trim());
-    toast('✓ Clave creada — guárdala en un lugar seguro');
-    return true;
-  }
   const intento = prompt('Ingresa la clave para continuar:');
-  if(intento === pinGuardado) return true;
+  if(intento === EQUIPOS_PIN) return true;
   if(intento !== null) toast('✕ Clave incorrecta');
   return false;
 }
@@ -5724,17 +5716,6 @@ document.getElementById('addEquipoBtn').addEventListener('click', async () => {
   renderEquipList();
 });
 document.getElementById('btnCancelarEdicionEquipo').addEventListener('click', cancelarEdicionEquipo);
-document.getElementById('btnCambiarClaveEquipos').addEventListener('click', async () => {
-  const actual = await storage.get('equipos_pin');
-  if(actual){
-    const verificacion = prompt('Ingresa la clave actual para poder cambiarla:');
-    if(verificacion !== actual){ if(verificacion !== null) toast('✕ Clave incorrecta'); return; }
-  }
-  const nueva = prompt('Escribe la nueva clave:');
-  if(!nueva || !nueva.trim()){ toast('Cambio cancelado'); return; }
-  await storage.set('equipos_pin', nueva.trim());
-  toast('✓ Clave actualizada');
-});
 
 function renderPersonList(containerId, list, onRemove){
   const box = document.getElementById(containerId);
@@ -6315,7 +6296,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v46'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v47'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
