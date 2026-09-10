@@ -3911,7 +3911,7 @@ function buildMttoPauta(){
   return secciones;
 }
 
-// Pauta de INSPECCIÓN (23 ítems, ANT-PHN-25-006 Rev.01)
+// Pauta de INSPECCIÓN (ANT-PHN-25-006 Rev.01 — solo verificación, sin cambio de repuestos)
 function buildInspeccionPauta(){
   const equipoId = document.getElementById('f_equipo') ? document.getElementById('f_equipo').value : '';
   const equipo = equipos.find(e => e.id === equipoId);
@@ -3919,11 +3919,11 @@ function buildInspeccionPauta(){
 
   const seccionMotor = esPortatil
     ? { key:'motor', title:'MOTOR DIÉSEL', items:[
-        'Aceite de motor drenado y reemplazado según especificación del fabricante.',
+        'Estado y color del aceite de motor verificado (sin contaminación evidente).',
         'Nivel de aceite verificado con varilla medidora.',
-        'Filtro de aceite del motor reemplazado; sellos/O-rings revisados.',
-        'Filtro de combustible reemplazado; sellos/O-rings revisados.',
-        'Filtro de aire de admisión (motor y unidad) reemplazado y cierre hermético verificado.',
+        'Filtro de aceite del motor inspeccionado; sellos/O-rings verificados (sin fugas ni daños).',
+        'Filtro de combustible inspeccionado; sellos/O-rings verificados (sin fugas ni daños).',
+        'Filtro de aire de admisión (motor y unidad) inspeccionado; estado y cierre hermético verificados.',
         'Nivel y estado de refrigerante verificado (color, limpieza, sin contaminación).'
       ]}
     : { key:'motor', title:'MOTOR ELÉCTRICO', items:[
@@ -3934,7 +3934,7 @@ function buildInspeccionPauta(){
         'Aislamiento y protecciones térmicas verificadas.'
       ]};
 
-  const seccionComponentes = { key:'componentes', title:'VERIFICACIÓN O CAMBIO DE COMPONENTES', items: [
+  const seccionComponentes = { key:'componentes', title:'VERIFICACIÓN DE COMPONENTES', items: [
     ...(esPortatil ? [
       'Alternador: voltaje de salida medido y estado físico verificado.',
       'Motor de arranque: accionamiento y conexiones eléctricas comprobados.',
@@ -3943,18 +3943,16 @@ function buildInspeccionPauta(){
       'Contactor / partidor: estado y funcionamiento verificado.',
     ]),
     'Mangueras y conexiones: grietas, resequedad, abultamientos o fugas revisadas.',
-    'Correas y poleas: tensión, alineación y desgaste verificados.',
-    'Componentes reemplazados (si corresponde) y funcionamiento verificado tras el cambio.'
+    'Correas y poleas: tensión, alineación y desgaste verificados.'
   ]};
 
   return [
     seccionMotor,
     { key:'unidad', title:'UNIDAD COMPRESORA (TORNILLO)', items:[
-      'Aceite de la unidad compresora drenado e inspeccionado (partículas metálicas, agua).',
-      'Aceite nuevo cargado según especificación; nivel verificado en visor.',
-      'Filtro de aceite de la unidad compresora reemplazado y ajustado a torque.',
-      'Filtro separador aire-aceite reemplazado; carcasa cerrada sin fugas.',
-      'Rodamientos del lado motor y unidad compresora monitoreados/engrasados.'
+      'Aceite de la unidad compresora verificado en visor (nivel, color, presencia de partículas metálicas o agua).',
+      'Filtro de aceite de la unidad compresora inspeccionado (estado, fugas, ajuste).',
+      'Filtro separador aire-aceite inspeccionado; carcasa verificada sin fugas.',
+      'Rodamientos del lado motor y unidad compresora verificados (temperatura, ruido, vibración).'
     ]},
     seccionComponentes,
     { key:'puesta', title:'PUESTA EN MARCHA Y PRUEBAS', items:[
@@ -4846,12 +4844,19 @@ function renderPhotos(container, key, onChange){
     t.querySelector('.rm').addEventListener('click', (e) => { e.stopPropagation(); photoState[key].splice(idx,1); onChange(); });
     container.appendChild(t);
   });
-  const add = document.createElement('label');
-  add.className = 'add-photo';
-  add.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="14" r="3.2"/></svg>Foto
+  const addCam = document.createElement('label');
+  addCam.className = 'add-photo';
+  addCam.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 8h3l1.5-2h7L17 8h3a1 1 0 011 1v10a1 1 0 01-1 1H4a1 1 0 01-1-1V9a1 1 0 011-1z"/><circle cx="12" cy="14" r="3.2"/></svg>Cámara
+    <input type="file" accept="image/*" capture="environment" style="display:none;">`;
+  addCam.querySelector('input').addEventListener('change', (e) => handlePhotoFiles(e.target.files, key, container, onChange));
+  container.appendChild(addCam);
+
+  const addGal = document.createElement('label');
+  addGal.className = 'add-photo';
+  addGal.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>Galería
     <input type="file" accept="image/*" multiple style="display:none;">`;
-  add.querySelector('input').addEventListener('change', (e) => handlePhotoFiles(e.target.files, key, container, onChange));
-  container.appendChild(add);
+  addGal.querySelector('input').addEventListener('change', (e) => handlePhotoFiles(e.target.files, key, container, onChange));
+  container.appendChild(addGal);
 }
 
 function handlePhotoFiles(files, key, container, onChange){
@@ -6296,7 +6301,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v47'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v49'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
