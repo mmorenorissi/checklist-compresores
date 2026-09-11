@@ -5213,6 +5213,22 @@ async function deleteRecord(id){
     toast('Registro eliminado');
   }catch(e){ console.error(e); toast('✕ Error al eliminar'); }
 }
+async function eliminarRegistroRemoto(id){
+  const cfg = await getSyncConfig();
+  if(!cfg || !cfg.url || !cfg.appKey) return { ok:false, reason:'no_config' };
+  if(!navigator.onLine) return { ok:false, reason:'offline' };
+  try{
+    const body = new URLSearchParams();
+    body.set('action', 'eliminar');
+    body.set('key', cfg.appKey);
+    body.set('id', id);
+    const resp = await fetch(cfg.url, { method:'POST', body });
+    const data = await resp.json();
+    return data && data.ok ? { ok:true } : { ok:false, reason: (data && data.error) || 'error_servidor' };
+  }catch(e){
+    return { ok:false, reason:'network_o_backend_sin_soporte' };
+  }
+}
 
 /* ============================================================
    SINCRONIZACIÓN COMPARTIDA (Google Apps Script) — opcional.
@@ -5579,7 +5595,10 @@ async function loadHistory(){
       <div style="flex:1;">${historyRowHTML(item)}</div>
       <button class="hist-del" data-del="${item.id}" style="margin-right:10px;">🗑</button>
     </div>`).join('');
-  const remotosHTML = await Promise.all(remotosFiltrados.map(r => remoteRowHTML(r)));
+  const remotosHTML = await Promise.all(remotosFiltrados.map(async r => `<div style="display:flex;align-items:center;">
+      <div style="flex:1;">${await remoteRowHTML(r)}</div>
+      <button class="hist-del" data-delremote="${esc(r.id)}" style="margin-right:10px;">🗑</button>
+    </div>`));
 
   list.innerHTML = localesHTML + remotosHTML.join('');
   list.querySelectorAll('[data-open]').forEach(el => el.addEventListener('click', () => loadRecordIntoForm(el.dataset.open)));
@@ -5588,6 +5607,14 @@ async function loadHistory(){
     e.stopPropagation();
     if(!(await verificarClaveEquipos())) return; // misma clave que protege Equipos
     if(confirm('¿Eliminar este registro?')){ await deleteRecord(el.dataset.del); loadHistory(); }
+  }));
+  list.querySelectorAll('[data-delremote]').forEach(el => el.addEventListener('click', async (e) => {
+    e.stopPropagation();
+    if(!(await verificarClaveEquipos())) return; // misma clave que protege Equipos
+    if(!confirm('¿Eliminar este registro de la nube para TODOS (técnicos incluidos)? No se puede deshacer.')) return;
+    const r = await eliminarRegistroRemoto(el.dataset.delremote);
+    if(r.ok){ toast('✓ Registro eliminado de la nube'); await fetchRemoteList(); loadHistory(); }
+    else toast('✕ No se pudo eliminar (' + r.reason + ')');
   }));
 }
 
@@ -6305,7 +6332,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v51'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v52'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
