@@ -3917,52 +3917,17 @@ function buildInspeccionPauta(){
   const equipo = equipos.find(e => e.id === equipoId);
   const esPortatil = equipo ? equipo.categoria === 'portatil' : true; // sin equipo elegido aún -> mantiene la vista original
 
-  const seccionMotor = esPortatil
-    ? { key:'motor', title:'MOTOR DIÉSEL', items:[
-        'Estado y color del aceite de motor verificado (sin contaminación evidente).',
-        'Nivel de aceite verificado con varilla medidora.',
-        'Filtro de aceite del motor inspeccionado; sellos/O-rings verificados (sin fugas ni daños).',
-        'Filtro de combustible inspeccionado; sellos/O-rings verificados (sin fugas ni daños).',
-        'Filtro de aire de admisión (motor y unidad) inspeccionado; estado y cierre hermético verificados.',
-        'Nivel y estado de refrigerante verificado (color, limpieza, sin contaminación).'
-      ]}
-    : { key:'motor', title:'MOTOR ELÉCTRICO', items:[
-        'Temperatura de operación del motor verificada (sin sobrecalentamiento).',
-        'Ruido y vibración anormal verificados.',
-        'Conexiones eléctricas del motor: apriete y estado verificado.',
-        'Ventilación del motor libre de obstrucciones.',
-        'Aislamiento y protecciones térmicas verificadas.'
-      ]};
-
-  const seccionComponentes = { key:'componentes', title:'VERIFICACIÓN DE COMPONENTES', items: [
-    ...(esPortatil ? [
-      'Alternador: voltaje de salida medido y estado físico verificado.',
-      'Motor de arranque: accionamiento y conexiones eléctricas comprobados.',
-      'Radiador: panal, aletas y posibles obstrucciones/fugas inspeccionadas.',
-    ] : [
-      'Contactor / partidor: estado y funcionamiento verificado.',
-    ]),
-    'Mangueras y conexiones: grietas, resequedad, abultamientos o fugas revisadas.',
-    'Correas y poleas: tensión, alineación y desgaste verificados.'
-  ]};
+  const items = [
+    'Datos de operación general verificados (temperaturas, presiones, indicadores del panel).',
+    'Aceite de la unidad compresora verificado en visor (nivel, color).',
+    'Filtros de aceite de la unidad compresora inspeccionado (estado, fugas, ajuste).',
+    'Estado de mangueras y conexiones.',
+  ];
+  if(esPortatil) items.push('Estado de correas y poleas.');
+  items.push('Estado de panel o controlador.');
 
   return [
-    seccionMotor,
-    { key:'unidad', title:'UNIDAD COMPRESORA (TORNILLO)', items:[
-      'Aceite de la unidad compresora verificado en visor (nivel, color, presencia de partículas metálicas o agua).',
-      'Filtro de aceite de la unidad compresora inspeccionado (estado, fugas, ajuste).',
-      'Filtro separador aire-aceite inspeccionado; carcasa verificada sin fugas.',
-      'Rodamientos del lado motor y unidad compresora verificados (temperatura, ruido, vibración).'
-    ]},
-    seccionComponentes,
-    { key:'puesta', title:'PUESTA EN MARCHA Y PRUEBAS', items:[
-      'Bloqueo/etiquetado retirado y corta corriente posicionado en ON.',
-      'Indicadores, luces piloto y controlador verificados en condiciones normales.',
-      'Válvula de descarga de aire abierta en forma gradual y progresiva.',
-      'Estabilización de presión monitoreada dentro de parámetros normales.',
-      'Ausencia de fugas de aire y aceite verificada tras la presurización.',
-      'Todas las protecciones y puertas laterales reinstaladas correctamente.'
-    ]}
+    { key:'detalle', title:'DETALLE DE LA INTERVENCIÓN', items }
   ];
 }
 
@@ -5957,26 +5922,33 @@ async function generarInformePDF(){
   doc.setFont('helvetica','bold'); doc.setFontSize(14);
   doc.text('INFORME DE SERVICIO — ' + servicioLabel, marginX, y); y += 6;
   doc.setFont('helvetica','normal'); doc.setFontSize(8);
-  doc.text('ANT-PHN-25-006 Rev.01 — Mantención y Reparación de Equipos de Aire Comprimido — Minera Antucoya', marginX, y); y += 7;
+  doc.text('Mantención y Reparación de Equipos de Aire Comprimido — Minera Antucoya', marginX, y); y += 7;
 
-  doc.setFontSize(9);
-  doc.text(`Equipo: ${equipoNombre}   Marca/Modelo: ${marca} ${modelo}   Serie: ${serie}   Horómetro: ${horometro}`, marginX, y); y += 5;
+  doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.text('1. Datos Generales', marginX, y); y += 5;
+  doc.setFont('helvetica','normal');
+  [
+    `Equipo: ${equipoNombre}`,
+    `Marca/Modelo: ${marca} ${modelo}`,
+    `Serie: ${serie}`,
+    `N° Informe: ${ninforme}`,
+    `Fecha: ${fecha}`,
+    `Área: ${area}`,
+    `Técnico(s): ${tecnico}`,
+    `Supervisor: ${supervisor}`,
+    `Hora inicio: ${horainicio}   Hora término: ${horatermino}`,
+    `N° Interno/Placa: ${interno}`,
+    `Ubicación: ${ubicacion}`,
+    `Horómetro actual: ${horometro}`
+  ].forEach(linea => { doc.text(linea, marginX, y); y += 5; });
   doc.setFont('helvetica','bold');
-  doc.text(`Resultado: ${counts.bueno} Bueno / ${counts.regular} Regular / ${counts.malo} Malo   ·   ESTADO: ${estado.label}`, marginX, y); y += 7;
+  doc.text(`ESTADO: ${estado.label}`, marginX, y); y += 7;
   doc.setFont('helvetica','normal');
 
-  doc.setFont('helvetica','bold'); doc.text('1. Datos Generales', marginX, y); doc.setFont('helvetica','normal'); y += 5;
-  doc.text(`N° Informe: ${ninforme}   Fecha: ${fecha}   Área: ${area}   Tipo de servicio: ${tiposervicio}`, marginX, y); y += 5;
-  doc.text(`Técnico(s): ${tecnico}   Supervisor: ${supervisor}   Hora inicio: ${horainicio}   Hora término: ${horatermino}`, marginX, y); y += 7;
-
-  doc.setFont('helvetica','bold'); doc.text('2. Datos del Equipo', marginX, y); doc.setFont('helvetica','normal'); y += 5;
-  doc.text(`Marca: ${marca}   Modelo: ${modelo}   N° Serie: ${serie}`, marginX, y); y += 5;
-  doc.text(`N° Interno/Placa: ${interno}   Ubicación: ${ubicacion}   Horómetro actual: ${horometro}`, marginX, y); y += 6;
-
+  let secNum = 2;
   // 3. Detalle de la intervención: checklist + repuestos programados, en el MISMO orden
   // que aparecen en la app real (Seguridad → Repuestos programados → Componentes → Puesta en
   // marcha), cada ítem con su resultado y su foto justo debajo — no separado al final.
-  y = pdfSectionTitle(doc, y, marginX, '3. DETALLE DE LA INTERVENCIÓN');
+  y = pdfSectionTitle(doc, y, marginX, secNum++ + '. DETALLE DE LA INTERVENCIÓN');
 
   async function renderDetalleItem(texto, resultadoTxt, colorRGB, obs, fotos){
     y = pdfEnsureSpace(doc, y, 10);
@@ -6050,24 +6022,28 @@ async function generarInformePDF(){
   }
   y += 3;
 
-  // 4. Repuestos y materiales utilizados
+  const esInspeccion = currentServicio === 'inspeccion';
+
+  // Repuestos y materiales utilizados — no aplica en Inspección (no hay cambio de repuestos)
   const rUsados = repuestosUsados.filter(r => (r.descripcion||'').trim());
-  y = pdfSectionTitle(doc, y, marginX, '4. REPUESTOS Y MATERIALES UTILIZADOS');
-  if(rUsados.length){
-    doc.autoTable({
-      startY: y, margin: { left: marginX, right: marginX },
-      head: [['Ítem','Descripción','N° Parte','Cantidad']],
-      body: rUsados.map((r,i) => [String(i+1), r.descripcion, r.parte||'—', r.cantidad||'—']),
-      styles: { fontSize: 8, cellPadding: 2 },
-      headStyles: { fillColor: [42,58,74] },
-    });
-    y = doc.lastAutoTable.finalY + 6;
-  } else {
-    doc.setFontSize(9); doc.setTextColor(120); doc.text('Sin repuestos registrados.', marginX, y); doc.setTextColor(0); y += 8;
+  if(!esInspeccion){
+    y = pdfSectionTitle(doc, y, marginX, secNum++ + '. REPUESTOS Y MATERIALES UTILIZADOS');
+    if(rUsados.length){
+      doc.autoTable({
+        startY: y, margin: { left: marginX, right: marginX },
+        head: [['Ítem','Descripción','N° Parte','Cantidad']],
+        body: rUsados.map((r,i) => [String(i+1), r.descripcion, r.parte||'—', r.cantidad||'—']),
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [42,58,74] },
+      });
+      y = doc.lastAutoTable.finalY + 6;
+    } else {
+      doc.setFontSize(9); doc.setTextColor(120); doc.text('Sin repuestos registrados.', marginX, y); doc.setTextColor(0); y += 8;
+    }
   }
 
-  // 7. Observaciones, hallazgos y recomendaciones
-  y = pdfSectionTitle(doc, y, marginX, '5. OBSERVACIONES, HALLAZGOS Y RECOMENDACIONES');
+  // Observaciones, hallazgos y recomendaciones
+  y = pdfSectionTitle(doc, y, marginX, secNum++ + '. OBSERVACIONES, HALLAZGOS Y RECOMENDACIONES');
   doc.setFontSize(9);
   if(hallazgos){
     const lineas = doc.splitTextToSize(hallazgos, pageW - marginX*2);
@@ -6077,28 +6053,33 @@ async function generarInformePDF(){
     doc.setTextColor(120); doc.text('Sin observaciones adicionales.', marginX, y); doc.setTextColor(0); y += 8;
   }
 
-  // 8. Repuestos recomendados próxima mantención
+  // Repuestos recomendados próxima mantención — no aplica en Inspección
   const rRec = repuestosRec.filter(r => (r.descripcion||'').trim());
-  y = pdfSectionTitle(doc, y, marginX, '6. REPUESTOS E INSUMOS RECOMENDADOS PARA PRÓXIMAS MANTENCIONES');
-  if(rRec.length){
-    doc.autoTable({
-      startY: y, margin: { left: marginX, right: marginX },
-      head: [['Ítem','Descripción','N° Parte','Cant. Sugerida','Observación']],
-      body: rRec.map((r,i) => [String(i+1), r.descripcion, r.parte||'—', r.cantidad||'—', r.obs||'—']),
-      styles: { fontSize: 8, cellPadding: 2 },
-      headStyles: { fillColor: [42,58,74] },
-    });
-    y = doc.lastAutoTable.finalY + 6;
-  } else {
-    doc.setFontSize(9); doc.setTextColor(120); doc.text('Sin recomendaciones.', marginX, y); doc.setTextColor(0); y += 8;
+  if(!esInspeccion){
+    y = pdfSectionTitle(doc, y, marginX, secNum++ + '. REPUESTOS E INSUMOS RECOMENDADOS PARA PRÓXIMAS MANTENCIONES');
+    if(rRec.length){
+      doc.autoTable({
+        startY: y, margin: { left: marginX, right: marginX },
+        head: [['Ítem','Descripción','N° Parte','Cant. Sugerida','Observación']],
+        body: rRec.map((r,i) => [String(i+1), r.descripcion, r.parte||'—', r.cantidad||'—', r.obs||'—']),
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [42,58,74] },
+      });
+      y = doc.lastAutoTable.finalY + 6;
+    } else {
+      doc.setFontSize(9); doc.setTextColor(120); doc.text('Sin recomendaciones.', marginX, y); doc.setTextColor(0); y += 8;
+    }
   }
 
-  // 9. Entrega del equipo a Operaciones
-  y = pdfSectionTitle(doc, y, marginX, '7. ENTREGA DEL EQUIPO A OPERACIONES');
+  // Entrega del equipo a Operaciones — en Inspección solo quedan las filas que aplican
+  y = pdfSectionTitle(doc, y, marginX, secNum++ + '. ENTREGA DEL EQUIPO A OPERACIONES');
+  const entregaFilas = esInspeccion
+    ? [[0, 'Estado inicial del equipo Inspeccionado'], [3, ENTREGA_ITEMS[3]]]
+    : ENTREGA_ITEMS.map((txt,i) => [i, txt]);
   doc.autoTable({
     startY: y, margin: { left: marginX, right: marginX },
     head: [['Ítem','Estado']],
-    body: ENTREGA_ITEMS.map((txt,i) => [txt, entregaState[i] ? 'SÍ' : '—']),
+    body: entregaFilas.map(([i,txt]) => [txt, entregaState[i] ? 'SÍ' : '—']),
     styles: { fontSize: 8, cellPadding: 2 },
     headStyles: { fillColor: [42,58,74] },
     columnStyles: { 1: { cellWidth: 20 } },
@@ -6335,7 +6316,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v54'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v55'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
