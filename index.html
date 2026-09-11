@@ -5394,10 +5394,11 @@ async function remoteRowHTML(item){
   const estado = (item.estado || '').toUpperCase();
   const cls = estado.includes('NO OPERATIVO') || estado.includes('CRÍTICO') ? 'malo' : estado.includes('OBSERVACION') ? 'regular' : 'bueno';
   const servicioLabel = (item.tipoServicio||'').toLowerCase().includes('inspecc') ? 'Inspección' : 'Mantención';
+  const pdfIcon = item.pdfUrl ? `<a href="${esc(item.pdfUrl)}" target="_blank" onclick="event.stopPropagation()" title="Abrir PDF en Drive">📄</a>` : '';
   return `<div class="hist-item" data-remote="${esc(item.id)}">
     <div class="hist-badge" style="background:var(--steel);">🌐</div>
     <div class="hist-main">
-      <div class="t1">${esc(equipo)}</div>
+      <div class="t1">${esc(equipo)} ${pdfIcon}</div>
       <div class="t2">${esc(servicioLabel)} · ${esc(fecha)} · ${esc(item.tecnicos||'')}</div>
     </div>
     <div class="hist-chip" style="${cls==='malo'?'background:var(--malo-bg);color:var(--malo);':cls==='regular'?'background:var(--regular-bg);color:var(--regular);':'background:var(--bueno-bg);color:var(--bueno);'}">${esc(estado || 'remoto')}</div>
@@ -5424,6 +5425,9 @@ async function openRemoteDetail(id){
         <span style="color:var(--muted);">Técnico(s): ${esc(r.tecnicos||'—')} · Supervisor: ${esc(r.supervisor||'—')}</span><br>
         <b style="color:var(--steel);">Estado: ${esc(r.estado||'—')}</b>
       </div>`;
+    if(r.pdfUrl){
+      html += `<a href="${esc(r.pdfUrl)}" target="_blank" style="display:inline-block;margin-bottom:12px;padding:8px 12px;background:var(--steel);color:#fff;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none;">📄 Abrir PDF en Drive</a>`;
+    }
     if(full && full.items){
       const desc = full.itemsDescriptivos || {};
       const evaluadosEntries = Object.entries(full.items).filter(([k,s]) => s.status === 'bueno' || s.status === 'regular' || s.status === 'malo');
@@ -6301,7 +6305,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v49'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v50'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
