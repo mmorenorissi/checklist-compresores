@@ -2875,6 +2875,7 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
           <div class="field"><label>N° de Informe</label><input type="text" id="f_ninforme"></div>
           <div class="field"><label>Fecha</label><input type="date" id="f_fecha"></div>
         </div>
+        <div class="field"><label>N° de OT</label><input type="text" id="f_ot"></div>
         <div class="field"><label>Tipo de Servicio</label><input type="text" id="f_tiposervicio"></div>
         <div class="row2">
           <div class="field">
@@ -4654,6 +4655,7 @@ async function resumeDraft(draft){
   renderPlannedMaintenance(equipoDelDraft, plannedSnapshot);
 
   document.getElementById('f_ninforme').value = draft.ninforme || '';
+  document.getElementById('f_ot').value = draft.ot || '';
   document.getElementById('f_fecha').value = draft.fecha || '';
   document.getElementById('f_tiposervicio').value = draft.tiposervicio || '';
   renderTecnicoRows(draft.tecnico ? draft.tecnico.split(' / ') : []);
@@ -4719,6 +4721,7 @@ function startNewForm(servicio){
   const ninformeEl = document.getElementById('f_ninforme');
   ninformeEl.value = '';
   delete ninformeEl.dataset.autofolio;
+  document.getElementById('f_ot').value = '';
   document.getElementById('f_fecha').value = todayISO();
   document.getElementById('f_tiposervicio').value = servicio === 'inspeccion' ? 'INSPECCIÓN GENERAL' : 'MANTENCIÓN';
   renderTecnicoRows([]);
@@ -5051,6 +5054,7 @@ function buildRecord(){
     equipoNombre: equipoSel ? equipoSel.nombre : '',
     intervalo: currentServicio === 'mtto' ? document.getElementById('f_intervalo').value : '',
     ninforme: document.getElementById('f_ninforme').value,
+    ot: document.getElementById('f_ot').value,
     completadoPor: document.getElementById('f_completadoPor').value,
     fecha: document.getElementById('f_fecha').value,
     area: document.getElementById('f_area').value,
@@ -5485,6 +5489,7 @@ async function loadRecordIntoForm(id){
   renderPlannedMaintenance(equipoDelRegistro, rec.maintenancePlanSnapshot || null);
 
   document.getElementById('f_ninforme').value = rec.ninforme || '';
+  document.getElementById('f_ot').value = rec.ot || '';
   document.getElementById('f_fecha').value = rec.fecha || '';
   document.getElementById('f_tiposervicio').value = rec.tiposervicio || '';
   renderTecnicoRows(rec.tecnico ? rec.tecnico.split(' / ') : []);
@@ -5919,6 +5924,7 @@ async function generarInformePDF(){
 
   const servicioLabel = currentServicio === 'inspeccion' ? 'INSPECCIÓN' : 'MANTENCIÓN';
   const ninforme = document.getElementById('f_ninforme').value || '—';
+  const ot = document.getElementById('f_ot').value || '—';
   const fecha = document.getElementById('f_fecha').value || '—';
   const area = document.getElementById('f_area').value || '—';
   const tiposervicio = document.getElementById('f_tiposervicio').value || '—';
@@ -5953,6 +5959,7 @@ async function generarInformePDF(){
     `Marca/Modelo: ${marca} ${modelo}`,
     `Serie: ${serie}`,
     `N° Informe: ${ninforme}`,
+    `N° de OT: ${ot}`,
     `Fecha: ${fecha}`,
     `Área: ${area}`,
     `Técnico(s): ${tecnico}`,
@@ -6345,7 +6352,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v57'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v0'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
