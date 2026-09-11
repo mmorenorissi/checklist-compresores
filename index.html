@@ -2985,7 +2985,7 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
             <canvas id="sigTecnico"></canvas>
             <div class="sig-actions"><button class="link-btn" data-clear="sigTecnico">Borrar</button></div>
           </div>
-          <div class="sig-box">
+          <div class="sig-box" id="sigBoxSupervisor">
             <div class="sig-label">Firma supervisor</div>
             <canvas id="sigSupervisor"></canvas>
             <div class="sig-actions"><button class="link-btn" data-clear="sigSupervisor">Borrar</button></div>
@@ -3199,12 +3199,14 @@ const EQUIPOS_DEFAULT = [
 // cambia la ETIQUETA que ve el técnico en el botón.
 const RESPUESTA_TIPOS = {
   estado:  [ {label:'BUENO', val:'bueno'}, {label:'REGULAR', val:'regular'}, {label:'MALO', val:'malo'}, {label:'N/A', val:'na'} ],
+  estado3: [ {label:'BUENO', val:'bueno'}, {label:'REGULAR', val:'regular'}, {label:'MALO', val:'malo'} ],
   si_no:   [ {label:'SÍ', val:'bueno'}, {label:'NO', val:'malo'}, {label:'N/A', val:'na'} ],
+  hallazgo:[ {label:'SÍ', val:'malo'}, {label:'NO', val:'bueno'} ],
   legible: [ {label:'LEGIBLE', val:'bueno'}, {label:'NO LEGIBLE', val:'malo'}, {label:'N/A', val:'na'} ],
 };
 function itemTexto(it){ return typeof it === 'string' ? it : it.texto; }
 function itemTipo(it){ return typeof it === 'string' ? 'estado' : (it.tipo || 'estado'); }
-function itemFotoObligatoria(it){ return typeof it === 'string' ? false : !!it.fotoObligatoria; }
+function itemFotoObligatoria(it){ return typeof it === 'string' ? false : (it.fotoObligatoria || false); }
 function labelParaValor(tipo, val){
   const opt = (RESPUESTA_TIPOS[tipo] || RESPUESTA_TIPOS.estado).find(o => o.val === val);
   return opt ? opt.label : (val ? val.toUpperCase() : '—');
@@ -3927,7 +3929,11 @@ function buildInspeccionPauta(){
   items.push({ texto:'Estado de panel o controlador.', fotoObligatoria: true });
 
   return [
-    { key:'detalle', title:'DETALLE DE LA INTERVENCIÓN', items }
+    { key:'detalle', title:'DETALLE DE LA INTERVENCIÓN', items },
+    { key:'entrega', title:'ENTREGA DEL EQUIPO A OPERACIONES', items:[
+      { texto:'Estado inicial del equipo Inspeccionado.', tipo:'estado3' },
+      { texto:'Hallazgo / anomalía detectada informada.', tipo:'hallazgo', fotoObligatoria:'si_malo' }
+    ]}
   ];
 }
 
@@ -4753,13 +4759,16 @@ function renderSections(){
       const key = itemKey(sec.key, i);
       const st = itemState[key];
       const tieneFotoObligatoria = itemFotoObligatoria(rawItem);
+      const fotoSoloSiHallazgo = tieneFotoObligatoria === 'si_malo';
+      const fotoSiempre = tieneFotoObligatoria === true;
       const sinFoto = !tieneFotoObligatoria && st.status === 'malo' && (!photoState[key] || !photoState[key].length);
-      const sinFotoSiempre = tieneFotoObligatoria && st.status && st.status !== 'na' && (!photoState[key] || !photoState[key].length);
+      const sinFotoSiempre = fotoSiempre && st.status && st.status !== 'na' && (!photoState[key] || !photoState[key].length);
+      const sinFotoCondicional = fotoSoloSiHallazgo && st.status === 'malo' && (!photoState[key] || !photoState[key].length);
       const div = document.createElement('div');
       div.className = 'item';
       div.dataset.key = key;
       div.innerHTML = `
-        <div class="item-text"><span class="idx">${i+1}</span><span>${esc(text)}${tieneFotoObligatoria ? ' <span style=\"color:var(--steel);font-size:11px;font-weight:700;\">📷 foto obligatoria</span>' : ''}</span></div>
+        <div class="item-text"><span class="idx">${i+1}</span><span>${esc(text)}${fotoSiempre ? ' <span style=\"color:var(--steel);font-size:11px;font-weight:700;\">📷 foto obligatoria</span>' : ''}${fotoSoloSiHallazgo ? ' <span style=\"color:var(--steel);font-size:11px;font-weight:700;\">📷 foto obligatoria si hay hallazgo</span>' : ''}</span></div>
         <div class="status-row" ${opciones.length !== 4 ? `style="grid-template-columns:repeat(${opciones.length}, 1fr);"` : ''}>
           ${opciones.map(o => `<div class="status-btn ${o.val} ${st.status===o.val?'sel':''}" data-status="${o.val}">${esc(o.label)}</div>`).join('')}
         </div>
@@ -4778,7 +4787,7 @@ function renderSections(){
           <div style="color:var(--malo);font-size:11.5px;font-weight:700;margin-bottom:5px;">📷 Sin foto — completa una justificación para poder guardar</div>
           <textarea class="just-textarea" placeholder="Justificación sin fotografía (obligatoria si no hay foto)…" style="width:100%;border:1.5px solid var(--malo-bg);border-radius:8px;padding:8px 10px;font-size:13px;">${esc(st.justSinFoto||'')}</textarea>
         </div>` : ''}
-        ${sinFotoSiempre ? `<div style="color:var(--malo);font-size:11.5px;font-weight:700;margin-top:9px;">📷 Este ítem requiere foto obligatoria — sube al menos una para poder guardar</div>` : ''}
+        ${(sinFotoSiempre || sinFotoCondicional) ? `<div style="color:var(--malo);font-size:11.5px;font-weight:700;margin-top:9px;">📷 Este ítem requiere foto obligatoria — sube al menos una para poder guardar</div>` : ''}
       `;
       div.querySelectorAll('.status-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -4958,18 +4967,19 @@ function renderEntregaChecklist(){
   document.getElementById('cardRepuestosUsados').style.display = esInspeccion ? 'none' : '';
   document.getElementById('cardObservaciones').style.display = esInspeccion ? 'none' : '';
   document.getElementById('cardRepuestosRec').style.display = esInspeccion ? 'none' : '';
-
-  const entregaFilas = esInspeccion
-    ? [[0, 'Estado inicial del equipo Inspeccionado'], [3, ENTREGA_ITEMS[3]]]
-    : ENTREGA_ITEMS.map((txt,i) => [i, txt]);
+  // en Inspección, "Estado inicial" y "Hallazgo/anomalía" ahora viven en el checklist principal
+  // (sectionsWrap), con foto/observación — este casillero clásico queda solo para Mantención.
+  document.getElementById('entregaItems').style.display = esInspeccion ? 'none' : '';
+  document.getElementById('sigBoxSupervisor').style.display = esInspeccion ? 'none' : '';
+  if(esInspeccion) return;
 
   const box = document.getElementById('entregaItems');
-  box.innerHTML = entregaFilas.map(([i,txt]) => `
+  box.innerHTML = ENTREGA_ITEMS.map((txt,i) => `
     <div class="entrega-item">
       <input type="checkbox" id="entrega-${i}" ${entregaState[i] ? 'checked' : ''}>
       <label for="entrega-${i}">${esc(txt)}</label>
     </div>`).join('');
-  entregaFilas.forEach(([i]) => {
+  ENTREGA_ITEMS.forEach((_,i) => {
     document.getElementById('entrega-'+i).addEventListener('change', e => { entregaState[i] = e.target.checked; });
   });
 }
@@ -5089,10 +5099,13 @@ function itemsSinEvidencia(){
   const yaListados = new Set(faltantes.map(([k]) => k));
   itemsForServicio(currentServicio).forEach(sec => {
     sec.items.forEach((rawItem, i) => {
-      if(!itemFotoObligatoria(rawItem)) return;
+      const fo = itemFotoObligatoria(rawItem);
+      if(!fo) return;
       const key = itemKey(sec.key, i);
       const s = itemState[key];
-      if(s && s.status && s.status !== 'na' && (!photoState[key] || !photoState[key].length) && !yaListados.has(key)){
+      if(!s || !s.status) return;
+      const requiereAhora = fo === true ? (s.status !== 'na') : (fo === 'si_malo' && s.status === 'malo');
+      if(requiereAhora && (!photoState[key] || !photoState[key].length) && !yaListados.has(key)){
         faltantes.push([key, s]);
       }
     });
@@ -5954,10 +5967,13 @@ async function generarInformePDF(){
   doc.setFont('helvetica','normal');
 
   let secNum = 2;
-  // 3. Detalle de la intervención: checklist + repuestos programados, en el MISMO orden
+  const esInspeccion = currentServicio === 'inspeccion';
+  // Detalle de la intervención: checklist + repuestos programados, en el MISMO orden
   // que aparecen en la app real (Seguridad → Repuestos programados → Componentes → Puesta en
   // marcha), cada ítem con su resultado y su foto justo debajo — no separado al final.
-  y = pdfSectionTitle(doc, y, marginX, secNum++ + '. DETALLE DE LA INTERVENCIÓN');
+  // En Inspección, cada sección (Detalle / Entrega) lleva su propio título numerado;
+  // en Mantención todo va bajo un único título "DETALLE DE LA INTERVENCIÓN".
+  if(!esInspeccion) y = pdfSectionTitle(doc, y, marginX, secNum++ + '. DETALLE DE LA INTERVENCIÓN');
 
   async function renderDetalleItem(texto, resultadoTxt, colorRGB, obs, fotos){
     y = pdfEnsureSpace(doc, y, 10);
@@ -6001,6 +6017,7 @@ async function generarInformePDF(){
   const tienePlan = equipoSel && getMaintenanceKey(equipoSel) && planSnapshot && planSnapshot.items;
 
   for(const sec of itemsForServicio(currentServicio)){
+    if(esInspeccion) y = pdfSectionTitle(doc, y, marginX, secNum++ + '. ' + sec.title);
     for(let i=0; i<sec.items.length; i++){
       const rawItem = sec.items[i];
       const key = itemKey(sec.key, i);
@@ -6030,8 +6047,6 @@ async function generarInformePDF(){
     doc.setFontSize(9); doc.setTextColor(120); doc.text('Sin ítems evaluados.', marginX, y); doc.setTextColor(0); y += 8;
   }
   y += 3;
-
-  const esInspeccion = currentServicio === 'inspeccion';
 
   // Repuestos y materiales utilizados — no aplica en Inspección (no hay cambio de repuestos)
   const rUsados = repuestosUsados.filter(r => (r.descripcion||'').trim());
@@ -6082,30 +6097,33 @@ async function generarInformePDF(){
     }
   }
 
-  // Entrega del equipo a Operaciones — en Inspección solo quedan las filas que aplican
-  y = pdfSectionTitle(doc, y, marginX, secNum++ + '. ENTREGA DEL EQUIPO A OPERACIONES');
-  const entregaFilas = esInspeccion
-    ? [[0, 'Estado inicial del equipo Inspeccionado'], [3, ENTREGA_ITEMS[3]]]
-    : ENTREGA_ITEMS.map((txt,i) => [i, txt]);
-  doc.autoTable({
-    startY: y, margin: { left: marginX, right: marginX },
-    head: [['Ítem','Estado']],
-    body: entregaFilas.map(([i,txt]) => [txt, entregaState[i] ? 'SÍ' : '—']),
-    styles: { fontSize: 8, cellPadding: 2 },
-    headStyles: { fillColor: [42,58,74] },
-    columnStyles: { 1: { cellWidth: 20 } },
-  });
-  y = doc.lastAutoTable.finalY + 6;
+  // Entrega del equipo a Operaciones — en Mantención va como tabla de casilleros;
+  // en Inspección ya se imprimió arriba como su propia sección del detalle (con foto y obs).
+  if(!esInspeccion){
+    y = pdfSectionTitle(doc, y, marginX, secNum++ + '. ENTREGA DEL EQUIPO A OPERACIONES');
+    doc.autoTable({
+      startY: y, margin: { left: marginX, right: marginX },
+      head: [['Ítem','Estado']],
+      body: ENTREGA_ITEMS.map((txt,i) => [txt, entregaState[i] ? 'SÍ' : '—']),
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [42,58,74] },
+      columnStyles: { 1: { cellWidth: 20 } },
+    });
+    y = doc.lastAutoTable.finalY + 6;
+  }
 
   y = pdfEnsureSpace(doc, y, 30);
   doc.setFontSize(9);
   doc.text(`Entregado a: ${entregadoA}   Cargo: ${cargo}   Fecha/Hora: ${fecha} / ${horatermino}`, marginX, y); y += 8;
   doc.text('Firma técnico:', marginX, y);
-  doc.text('Firma supervisor:', marginX + 95, y); y += 3;
+  if(!esInspeccion) doc.text('Firma supervisor:', marginX + 95, y);
+  y += 3;
   if(sigData.sigTecnico){ try{ doc.addImage(sigData.sigTecnico, 'PNG', marginX, y, 70, 22); }catch(e){} }
   else { doc.line(marginX, y+15, marginX+70, y+15); }
-  if(sigData.sigSupervisor){ try{ doc.addImage(sigData.sigSupervisor, 'PNG', marginX+95, y, 70, 22); }catch(e){} }
-  else { doc.line(marginX+95, y+15, marginX+165, y+15); }
+  if(!esInspeccion){
+    if(sigData.sigSupervisor){ try{ doc.addImage(sigData.sigSupervisor, 'PNG', marginX+95, y, 70, 22); }catch(e){} }
+    else { doc.line(marginX+95, y+15, marginX+165, y+15); }
+  }
 
   return doc;
 }
@@ -6327,7 +6345,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v56'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v57'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
