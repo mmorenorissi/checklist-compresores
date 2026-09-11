@@ -2929,7 +2929,7 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
 
     <div id="sectionsWrap"></div>
 
-    <div class="card">
+    <div class="card" id="cardRepuestosUsados">
       <div class="card-head"><h2>Repuestos y materiales utilizados</h2></div>
       <div class="card-pad">
         <div class="dyn-row" style="grid-template-columns:2fr 1fr 0.7fr auto;">
@@ -2943,14 +2943,14 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="cardObservaciones">
       <div class="card-head"><h2>Observaciones, hallazgos y recomendaciones</h2></div>
       <div class="card-pad">
         <textarea id="f_hallazgos" rows="4" placeholder="Un hallazgo por línea…" style="width:100%;border:1.5px solid var(--line);border-radius:8px;padding:9px 11px;font-family:var(--font-body);font-size:14px;"></textarea>
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="cardRepuestosRec">
       <div class="card-head"><h2>Repuestos recomendados próxima mantención</h2></div>
       <div class="card-pad">
         <div class="dyn-row" style="grid-template-columns:1.6fr 1fr 0.7fr 1.4fr auto;">
@@ -3918,13 +3918,13 @@ function buildInspeccionPauta(){
   const esPortatil = equipo ? equipo.categoria === 'portatil' : true; // sin equipo elegido aún -> mantiene la vista original
 
   const items = [
-    'Datos de operación general verificados (temperaturas, presiones, indicadores del panel).',
+    { texto:'Datos de operación general verificados (temperaturas, presiones, indicadores del panel).', fotoObligatoria: true },
     'Aceite de la unidad compresora verificado en visor (nivel, color).',
     'Filtros de aceite de la unidad compresora inspeccionado (estado, fugas, ajuste).',
     'Estado de mangueras y conexiones.',
   ];
   if(esPortatil) items.push('Estado de correas y poleas.');
-  items.push('Estado de panel o controlador.');
+  items.push({ texto:'Estado de panel o controlador.', fotoObligatoria: true });
 
   return [
     { key:'detalle', title:'DETALLE DE LA INTERVENCIÓN', items }
@@ -4954,13 +4954,22 @@ document.getElementById('addRepuestoRec').addEventListener('click', () => { repu
 
 /* ---- entrega del equipo ---- */
 function renderEntregaChecklist(){
+  const esInspeccion = currentServicio === 'inspeccion';
+  document.getElementById('cardRepuestosUsados').style.display = esInspeccion ? 'none' : '';
+  document.getElementById('cardObservaciones').style.display = esInspeccion ? 'none' : '';
+  document.getElementById('cardRepuestosRec').style.display = esInspeccion ? 'none' : '';
+
+  const entregaFilas = esInspeccion
+    ? [[0, 'Estado inicial del equipo Inspeccionado'], [3, ENTREGA_ITEMS[3]]]
+    : ENTREGA_ITEMS.map((txt,i) => [i, txt]);
+
   const box = document.getElementById('entregaItems');
-  box.innerHTML = ENTREGA_ITEMS.map((txt,i) => `
+  box.innerHTML = entregaFilas.map(([i,txt]) => `
     <div class="entrega-item">
       <input type="checkbox" id="entrega-${i}" ${entregaState[i] ? 'checked' : ''}>
       <label for="entrega-${i}">${esc(txt)}</label>
     </div>`).join('');
-  ENTREGA_ITEMS.forEach((_,i) => {
+  entregaFilas.forEach(([i]) => {
     document.getElementById('entrega-'+i).addEventListener('change', e => { entregaState[i] = e.target.checked; });
   });
 }
@@ -6042,7 +6051,8 @@ async function generarInformePDF(){
     }
   }
 
-  // Observaciones, hallazgos y recomendaciones
+  // Observaciones, hallazgos y recomendaciones — no aplica en Inspección
+  if(!esInspeccion){
   y = pdfSectionTitle(doc, y, marginX, secNum++ + '. OBSERVACIONES, HALLAZGOS Y RECOMENDACIONES');
   doc.setFontSize(9);
   if(hallazgos){
@@ -6051,6 +6061,7 @@ async function generarInformePDF(){
     doc.text(lineas, marginX, y); y += lineas.length*4.5 + 4;
   } else {
     doc.setTextColor(120); doc.text('Sin observaciones adicionales.', marginX, y); doc.setTextColor(0); y += 8;
+  }
   }
 
   // Repuestos recomendados próxima mantención — no aplica en Inspección
@@ -6316,7 +6327,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v55'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v56'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
