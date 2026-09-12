@@ -5409,7 +5409,7 @@ async function remoteRowHTML(item){
     <div class="hist-badge" style="background:var(--steel);">🌐</div>
     <div class="hist-main">
       <div class="t1">${esc(equipo)} ${pdfIcon}</div>
-      <div class="t2">${esc(servicioLabel)} · ${esc(fecha)} · ${esc(item.tecnicos||'')}</div>
+      <div class="t2">${esc(servicioLabel)} · ${esc(fecha)} · ${esc(item.completadoPor||'—')}</div>
     </div>
     <div class="hist-chip" style="${cls==='malo'?'background:var(--malo-bg);color:var(--malo);':cls==='regular'?'background:var(--regular-bg);color:var(--regular);':'background:var(--bueno-bg);color:var(--bueno);'}">${esc(estado || 'remoto')}</div>
   </div>`;
@@ -6352,7 +6352,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v0'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v1'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
