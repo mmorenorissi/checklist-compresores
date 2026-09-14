@@ -2822,7 +2822,7 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
       <div class="choice-card" id="choiceInspeccion" data-servicio="inspeccion">
         <div class="icon">🔍</div>
         <h3>Inspección</h3>
-        <p>Pauta de 23 puntos · Informe de verificación</p>
+        <p>Pauta breve de verificación (5-6 puntos según el equipo)</p>
       </div>
       <div class="choice-card" id="choiceMtto" data-servicio="mtto">
         <div class="icon">🛠️</div>
@@ -3923,7 +3923,7 @@ function buildInspeccionPauta(){
   const items = [
     { texto:'Datos de operación general verificados (temperaturas, presiones, indicadores del panel).', fotoObligatoria: true },
     'Aceite de la unidad compresora verificado en visor (nivel, color).',
-    'Filtros de aceite de la unidad compresora inspeccionado (estado, fugas, ajuste).',
+    'Filtro de aceite de la unidad compresora inspeccionado (estado, fugas, ajuste).',
     'Estado de mangueras y conexiones.',
   ];
   if(esPortatil) items.push('Estado de correas y poleas.');
@@ -3932,7 +3932,7 @@ function buildInspeccionPauta(){
   return [
     { key:'detalle', title:'DETALLE DE LA INTERVENCIÓN', items },
     { key:'entrega', title:'ENTREGA DEL EQUIPO A OPERACIONES', items:[
-      { texto:'Estado inicial del equipo Inspeccionado.', tipo:'estado3' },
+      { texto:'Estado inicial del equipo inspeccionado.', tipo:'estado3' },
       { texto:'Hallazgo / anomalía detectada informada.', tipo:'hallazgo', fotoObligatoria:'si_malo' }
     ]}
   ];
@@ -4018,6 +4018,12 @@ let currentId = null;         // id del registro en edición (null = nuevo)
 let currentServicio = null;   // 'inspeccion' | 'mtto'
 let itemState = {};           // { 'motor-0': {status:'', obs:''}, ... }  status: bueno|regular|malo|na|''
 let photoState = {};          // { 'motor-0': [dataURL,...] }
+let equipoPrevId = '';        // último equipo confirmado — para poder revertir si se cancela el cambio
+let intervaloPrevValue = '';  // ídem, para el intervalo de mantención
+function hayProgresoEnPauta(){
+  return Object.values(itemState).some(s => s.status || (s.obs && s.obs.trim())) ||
+         Object.values(photoState).some(arr => arr && arr.length);
+}
 let repuestosUsados = [];     // [{descripcion,parte,cantidad}]
 let repuestosRec = [];        // [{descripcion,parte,cantidad,obs}]
 let plannedState = {};        // { activityId: {status:'realizado'|'no_realizado'|'na'|'', obs:''} }
@@ -4268,6 +4274,11 @@ function populateFormEquipoSelect(){
   applyEquipoToForm(null); // limpio hasta que se elija un equipo puntual
 }
 document.getElementById('f_equipo').addEventListener('change', (e) => {
+  if(hayProgresoEnPauta() && !confirm('Cambiar de equipo eliminará las respuestas y fotos ya ingresadas en esta pauta. ¿Continuar?')){
+    e.target.value = equipoPrevId;
+    return;
+  }
+  equipoPrevId = e.target.value;
   const equipo = equipos.find(eq => eq.id === e.target.value) || null;
   applyEquipoToForm(equipo);
   if(currentServicio === 'mtto'){
@@ -4455,8 +4466,8 @@ async function renderHistorialEquipoMini(equipo){
   const previos = idx.filter(r => r.equipoId === equipo.id).sort((a,b) => (b.savedAt||'').localeCompare(a.savedAt||''));
   if(!previos.length){ box.style.display = 'none'; box.innerHTML = ''; return; }
   const ultimo = previos[0];
-  const estadoTxt = ultimo.criticoAlta > 0 ? 'NO OPERATIVO' : ultimo.malo > 0 ? 'Con observaciones' : 'Operativo';
-  const cls = ultimo.criticoAlta > 0 ? 'var(--malo)' : ultimo.malo > 0 ? 'var(--regular)' : 'var(--bueno)';
+  const estadoTxt = ultimo.criticoAlta > 0 ? 'NO OPERATIVO' : (ultimo.malo > 0 || ultimo.regular > 0) ? 'Con observaciones' : 'Operativo';
+  const cls = ultimo.criticoAlta > 0 ? 'var(--malo)' : (ultimo.malo > 0 || ultimo.regular > 0) ? 'var(--regular)' : 'var(--bueno)';
   box.style.display = 'block';
   box.style.cssText = 'display:block;background:var(--paper);border-radius:8px;padding:9px 11px;font-size:12px;color:var(--muted);margin-top:2px;';
   box.innerHTML = `<b style="color:${cls};">● Última inspección de este equipo:</b> ${esc(ultimo.fecha||'—')} · ${esc(ultimo.equipoLabel||'')} · <b style="color:${cls};">${estadoTxt}</b> (${previos.length} registro${previos.length>1?'s':''} en total)`;
@@ -4479,6 +4490,11 @@ document.getElementById('f_horometro').addEventListener('input', async () => {
 });
 
 document.getElementById('f_intervalo').addEventListener('change', (e) => {
+  if(hayProgresoEnPauta() && !confirm('Cambiar el intervalo eliminará las respuestas y fotos ya ingresadas en esta pauta. ¿Continuar?')){
+    e.target.value = intervaloPrevValue;
+    return;
+  }
+  intervaloPrevValue = e.target.value;
   document.getElementById('f_tiposervicio').value = 'MANTENCIÓN — ' + e.target.value;
   const equipoActual = equipos.find(eq => eq.id === document.getElementById('f_equipo').value);
   plannedState = {};
@@ -4650,6 +4666,8 @@ async function resumeDraft(draft){
   populateFormEquipoSelect();
   const equipoDelDraft = draft.equipoId ? equipos.find(e => e.id === draft.equipoId) : null;
   if(draft.equipoId){ document.getElementById('f_equipo').value = draft.equipoId; renderReferenciaMtto(equipoDelDraft); }
+  equipoPrevId = draft.equipoId || '';
+  intervaloPrevValue = draft.intervalo || '';
   populateFormIntervalo(equipoDelDraft);
   if(draft.intervalo) document.getElementById('f_intervalo').value = draft.intervalo;
   renderPlannedMaintenance(equipoDelDraft, plannedSnapshot);
@@ -4712,6 +4730,8 @@ function startNewForm(servicio){
   populateFormAreaSelect();
   populateFormEquipoSelect();
   populateFormIntervalo();
+  equipoPrevId = '';
+  intervaloPrevValue = '';
 
   // se arma DESPUÉS de limpiar los selects, para que la pauta inicial no herede
   // el equipo/intervalo de un registro anterior
@@ -5127,6 +5147,12 @@ async function saveRecord(){
     toast(`✕ Quedan ${pendientes} ítem(s) sin evaluar. Márcalos (aunque sea N/A) antes de guardar. El borrador automático sigue guardando tu avance mientras tanto.`);
     return false;
   }
+  const sinCriticidad = Object.values(itemState).filter(s => s.status === 'malo' && !s.criticidad);
+  if(sinCriticidad.length){
+    toast(`✕ Hay ${sinCriticidad.length} hallazgo(s) MALO sin criticidad seleccionada. Indica Crítica/Alta/Media/Baja para poder guardar.`);
+    renderSections();
+    return false;
+  }
   const sinEvidencia = itemsSinEvidencia();
   if(sinEvidencia.length){
     toast(`✕ Hay ${sinEvidencia.length} ítem(s) MALO sin foto ni justificación. Completa uno de los dos para guardar.`);
@@ -5484,6 +5510,8 @@ async function loadRecordIntoForm(id){
   }
   populateFormIntervalo(equipoDelRegistro);
   if(rec.intervalo) document.getElementById('f_intervalo').value = rec.intervalo;
+  equipoPrevId = rec.equipoId || '';
+  intervaloPrevValue = rec.intervalo || '';
   // usa el snapshot congelado (si el registro lo tiene) para que no cambie aunque
   // MAINTENANCE_PARTS se haya actualizado desde que se guardó este informe
   renderPlannedMaintenance(equipoDelRegistro, rec.maintenancePlanSnapshot || null);
@@ -6352,7 +6380,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v1'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v3'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
