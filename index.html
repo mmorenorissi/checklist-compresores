@@ -5352,34 +5352,107 @@ async function sincronizarPendientes(){
 }
 async function loadSyncConfigIntoForm(){
   const cfg = await getSyncConfig();
-  document.getElementById('syncUrl').value = cfg ? (cfg.url || '') : '';
-  document.getElementById('syncKey').value = cfg ? (cfg.appKey || '') : '';
+  const urlInput = document.getElementById('syncUrl');
+  const keyInput = document.getElementById('syncKey');
+  const btn = document.getElementById('btnSyncSave');
+
+  urlInput.value = cfg ? (cfg.url || '') : '';
+  keyInput.value = cfg ? (cfg.appKey || '') : '';
+
+  if(cfg && cfg.url && cfg.appKey){
+    urlInput.readOnly = true;
+    keyInput.readOnly = true;
+    urlInput.style.background = '#F0F1F4';
+    keyInput.style.background = '#F0F1F4';
+    btn.textContent = 'Editar configuración';
+    btn.dataset.mode = 'locked';
+  }else{
+    urlInput.readOnly = false;
+    keyInput.readOnly = false;
+    urlInput.style.background = '';
+    keyInput.style.background = '';
+    btn.textContent = 'Guardar y probar';
+    btn.dataset.mode = 'edit';
+  }
+
   renderSyncStatusBadge();
 }
+
 async function renderSyncStatusBadge(){
   const cfg = await getSyncConfig();
   const badge = document.getElementById('syncStatusBadge');
+
   if(!cfg || !cfg.url || !cfg.appKey){
-    badge.style.background = 'var(--pend-bg)'; badge.style.color = 'var(--muted)';
+    badge.style.background = 'var(--pend-bg)';
+    badge.style.color = 'var(--muted)';
     badge.textContent = 'Sin configurar — los registros quedan solo en este dispositivo.';
     return;
   }
-  badge.style.background = 'var(--bueno-bg)'; badge.style.color = 'var(--bueno)';
+
+  badge.style.background = 'var(--bueno-bg)';
+  badge.style.color = 'var(--bueno)';
   badge.textContent = '✓ Sincronización configurada — se envían los datos al guardar.';
 }
+
 document.getElementById('btnSyncSave').addEventListener('click', async () => {
-  const url = document.getElementById('syncUrl').value.trim();
-  const appKey = document.getElementById('syncKey').value.trim();
-  if(!url || !appKey){ toast('Completa la URL y la clave.'); return; }
-  await setSyncConfig({ url, appKey });
+  const btn = document.getElementById('btnSyncSave');
+  const urlInput = document.getElementById('syncUrl');
+  const keyInput = document.getElementById('syncKey');
+
+  // Si ya existe una configuración válida, el primer toque solo habilita edición.
+  if(btn.dataset.mode === 'locked'){
+    urlInput.readOnly = false;
+    keyInput.readOnly = false;
+    urlInput.style.background = '';
+    keyInput.style.background = '';
+    btn.textContent = 'Guardar y probar';
+    btn.dataset.mode = 'edit';
+    toast('Configuración desbloqueada para edición');
+    return;
+  }
+
+  const url = urlInput.value.trim();
+  const appKey = keyInput.value.trim();
+
+  if(!url || !appKey){
+    toast('Completa la URL y la clave.');
+    return;
+  }
+
   toast('Probando conexión…');
+
   try{
-    const resp = await fetch(url + '?action=ping&_=' + Date.now(), { cache: 'no-store' });
+    const resp = await fetch(
+      url + '?action=ping&_=' + Date.now(),
+      { cache: 'no-store' }
+    );
+
     const data = await resp.json();
-    if(data && data.ok){ toast('✓ Conexión exitosa'); } else { toast('⚠ Guardado, pero el servidor respondió con error'); }
-  }catch(e){ toast('⚠ Guardado, pero no se pudo probar la conexión (revisa la URL o el internet)'); }
+
+    if(data && data.ok){
+      // Solo persistir después de comprobar que el backend responde correctamente.
+      await setSyncConfig({ url, appKey });
+
+      urlInput.readOnly = true;
+      keyInput.readOnly = true;
+      urlInput.style.background = '#F0F1F4';
+      keyInput.style.background = '#F0F1F4';
+
+      btn.textContent = 'Editar configuración';
+      btn.dataset.mode = 'locked';
+
+      toast('✓ Conexión exitosa · configuración guardada');
+    }else{
+      toast('✕ El servidor respondió con error. No se guardaron los cambios.');
+    }
+
+  }catch(e){
+    toast('✕ No se pudo conectar. No se guardaron los cambios.');
+  }
+
   renderSyncStatusBadge();
 });
+
 document.getElementById('btnSyncNow').addEventListener('click', sincronizarPendientes);
 
 /* ============================================================
@@ -5833,7 +5906,25 @@ function toast(msg){
 /* ============================================================
    BOTONES DE ACCIÓN
    ============================================================ */
-document.getElementById('btnSave').addEventListener('click', saveRecord);
+document.getElementById('btnSave').addEventListener('click', async () => {
+  const btn = document.getElementById('btnSave');
+  if(btn.disabled) return; // evita doble clic mientras se está guardando
+
+  btn.disabled = true;
+  const textoOriginal = btn.textContent;
+  btn.textContent = 'Guardando…';
+
+  try{
+    const guardadoOk = await saveRecord();
+    if(!guardadoOk) return; // saveRecord ya mostró el motivo si no pudo guardar
+
+    await goToView('home');
+    toast('✓ Informe guardado con éxito');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = textoOriginal;
+  }
+});
 document.getElementById('btnDelete').addEventListener('click', async () => {
   if(!currentId) return;
   if(!(await verificarClaveEquipos())) return; // misma clave que protege Equipos
@@ -6380,7 +6471,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v3'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v4'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
