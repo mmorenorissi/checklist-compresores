@@ -2875,7 +2875,7 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
           <div class="field"><label>N° de Informe</label><input type="text" id="f_ninforme"></div>
           <div class="field"><label>Fecha</label><input type="date" id="f_fecha"></div>
         </div>
-        <div class="field"><label>N° de OT</label><input type="text" id="f_ot"></div>
+        <div class="field"><label>N° de OT *</label><input type="text" id="f_ot" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="Obligatorio · solo números" oninput="this.value=this.value.replace(/\D/g,'')"></div>
         <div class="field"><label>Tipo de Servicio</label><input type="text" id="f_tiposervicio"></div>
         <div class="row2">
           <div class="field">
@@ -5142,6 +5142,20 @@ function repuestosRealizadosSinFoto(){
   );
 }
 async function saveRecord(){
+  const otInput = document.getElementById('f_ot');
+  const ot = otInput.value.trim();
+  if(!ot){
+    toast('✕ Debe ingresar el N° de OT antes de guardar o generar el informe.');
+    otInput.focus();
+    return false;
+  }
+  if(!/^\d+$/.test(ot)){
+    toast('✕ El N° de OT debe contener solo números.');
+    otInput.focus();
+    otInput.select();
+    return false;
+  }
+
   const pendientes = Object.values(itemState).filter(s => !s.status).length;
   if(pendientes){
     toast(`✕ Quedan ${pendientes} ítem(s) sin evaluar. Márcalos (aunque sea N/A) antes de guardar. El borrador automático sigue guardando tu avance mientras tanto.`);
@@ -5306,10 +5320,13 @@ async function subirPdfRemoto(rec){
   const cfg = await getSyncConfig();
   if(!cfg || !cfg.url || !cfg.appKey) return { ok:false, reason:'no_config' };
   if(!navigator.onLine) return { ok:false, reason:'offline' };
+  const ot = String(rec.ot || '').trim();
+  if(!/^\d+$/.test(ot)) return { ok:false, reason:'ot_requerida' };
   try{
     const doc = await generarInformePDF();
     const base64 = doc.output('datauristring');
     const filename = formatFilenamePDF({
+      ot,
       servicio: rec.servicio, intervalo: rec.intervalo,
       equipoNombre: rec.equipoNombre || rec.interno || rec.modelo || 'Equipo',
       fecha: rec.fecha
@@ -5933,20 +5950,22 @@ document.getElementById('btnDelete').addEventListener('click', async () => {
     goToView('history');
   }
 });
-function formatFilenamePDF({ servicio, intervalo, equipoNombre, fecha }){
+function formatFilenamePDF({ ot, servicio, intervalo, equipoNombre, fecha }){
   const servicioLabel = servicio === 'inspeccion' ? 'Inspección' : 'Mantención';
   const intervaloClean = (servicio === 'mtto' && intervalo) ? String(intervalo).replace(/[.\s]/g,'') : '';
+  const otClean = String(ot || '').trim();
   let fechaFmt = fecha;
   if(fecha && /^\d{4}-\d{2}-\d{2}$/.test(fecha)){
     const [y,m,d] = fecha.split('-');
     fechaFmt = `${d}-${m}-${y}`; // se usa guion, no "/" — la barra no es válida en nombres de archivo
   }
-  const partes = [servicioLabel, intervaloClean, equipoNombre, fechaFmt].filter(Boolean);
+  const partes = [otClean, servicioLabel, intervaloClean, equipoNombre, fechaFmt].filter(Boolean);
   return partes.join(' ').replace(/[\\/:*?"<>|]/g, '-') + '.pdf';
 }
 function buildInformeFilename(){
   const equipoSel = equipos.find(e => e.id === document.getElementById('f_equipo').value);
   return formatFilenamePDF({
+    ot: document.getElementById('f_ot').value.trim(),
     servicio: currentServicio,
     intervalo: document.getElementById('f_intervalo').value,
     equipoNombre: equipoSel ? equipoSel.nombre : (document.getElementById('f_interno').value || 'Equipo'), // nombre, no modelo -> distingue entre unidades del mismo modelo
@@ -6471,7 +6490,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v4'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v5'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
