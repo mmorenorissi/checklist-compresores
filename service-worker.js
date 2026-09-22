@@ -1,4 +1,4 @@
-const CACHE = 'mantenimiento-compresores-ant-v5';
+const CACHE = 'mantenimiento-compresores-ant-v6';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -31,10 +31,14 @@ self.addEventListener('fetch', e => {
   // No interceptar solicitudes externas, por ejemplo Google Apps Script.
   if (url.origin !== self.location.origin) return;
 
+  // ANT-065 — patrón homologado con Clima (estándar §5.1 y §43):
+  // sirve la caché de inmediato y, en paralelo, consulta la red para dejar
+  // la caché al día de cara a la próxima apertura. Si todavía no hay nada
+  // cacheado para este recurso (primera carga de un archivo nuevo), se
+  // espera esta vez la respuesta de red antes de responder.
   e.respondWith(
-    caches.match(e.request).then(cached =>
-      cached ||
-      fetch(e.request)
+    caches.match(e.request).then(cached => {
+      const networkUpdate = fetch(e.request)
         .then(resp => {
           if (resp && resp.ok) {
             const copy = resp.clone();
@@ -42,13 +46,20 @@ self.addEventListener('fetch', e => {
           }
           return resp;
         })
-        .catch(() => {
-          // Fallback a la app solo para navegación.
-          if (e.request.mode === 'navigate') {
-            return caches.match('./index.html');
-          }
-          throw new Error('Recurso no disponible offline');
-        })
-    )
+        .catch(() => null); // sin conexión: no hay actualización, se sigue con lo cacheado
+
+      if (cached) {
+        return cached;
+      }
+
+      return networkUpdate.then(resp => {
+        if (resp) return resp;
+        // Fallback a la app solo para navegación.
+        if (e.request.mode === 'navigate') {
+          return caches.match('./index.html');
+        }
+        throw new Error('Recurso no disponible offline');
+      });
+    })
   );
 });
