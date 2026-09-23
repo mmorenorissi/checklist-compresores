@@ -3004,6 +3004,11 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
         <div class="filter-chip" data-f="inspeccion">Inspección</div>
         <div class="filter-chip" data-f="mtto">Mantención</div>
       </div>
+      <div class="card-pad" style="padding-top:8px;padding-bottom:0;display:flex;gap:8px;align-items:end;flex-wrap:wrap;">
+        <div class="field" style="flex:1;min-width:120px;margin-bottom:8px;"><label>Desde</label><input type="date" id="histDateFrom"></div>
+        <div class="field" style="flex:1;min-width:120px;margin-bottom:8px;"><label>Hasta</label><input type="date" id="histDateTo"></div>
+        <button class="btn btn-secondary" id="btnUltimos7" style="flex:none;height:40px;margin-bottom:8px;">Últimos 7 días</button>
+      </div>
       <div id="histList" style="margin-top:8px;"></div>
     </div>
     <div class="modal-bg" id="remoteModal">
@@ -3028,25 +3033,6 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
         <p style="font-size:11px;color:var(--muted);line-height:1.4;margin:10px 0 0;">
           Por ahora se sincronizan los datos de cada checklist (equipo, estados, observaciones) — las fotos y firmas
           quedan solo en el dispositivo que las tomó, eso lo sumamos en una siguiente etapa.
-        </p>
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-head"><h2>Respaldo y exportación</h2></div>
-      <div class="card-pad" style="display:flex;gap:10px;">
-        <button class="btn btn-secondary" id="btnExport" style="flex:1;">⬇ Respaldo JSON</button>
-        <button class="btn btn-secondary" id="btnExportCSV" style="flex:1;">📊 Exportar CSV</button>
-      </div>
-      <div class="card-pad" style="padding-top:0;">
-        <label class="btn btn-secondary" style="width:100%;text-align:center;display:block;">
-          ⬆ Importar respaldo
-          <input type="file" accept="application/json" id="fileImport" style="display:none;">
-        </label>
-      </div>
-      <div class="card-pad" style="padding-top:0;">
-        <p style="font-size:11.5px;color:var(--muted);line-height:1.4;margin:0;">
-          Los registros se guardan siempre en este dispositivo/navegador, aunque tengas la sincronización activada.
-          Exporta un respaldo cada cierto tiempo y guárdalo en Archivos, correo o WhatsApp.
         </p>
       </div>
     </div>
@@ -3075,7 +3061,7 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
       <div class="card-pad" style="padding-top:0;">
         <p style="font-size:11px;color:var(--muted);line-height:1.4;margin:0;background:var(--paper);border-radius:8px;padding:9px 11px;">
           💾 Estos cambios se guardan solo en este teléfono. Si haces ediciones importantes (nombres, equipos nuevos, técnicos),
-          ve a <b>Historial → Respaldo JSON</b> y guarda una copia — así no se pierde nada aunque el teléfono borre datos algún día.
+          usa <b>Respaldo JSON</b> más abajo y guarda una copia — así no se pierde nada aunque el teléfono borre datos algún día.
         </p>
       </div>
     </div>
@@ -3122,6 +3108,25 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
       <div class="card-pad" style="display:flex;gap:8px;">
         <input type="text" id="nuevoSupervisor" placeholder="Nombre del supervisor" style="flex:1;padding:10px 11px;border:1.5px solid var(--line);border-radius:8px;font-size:15px;">
         <button style="flex:none;padding:10px 16px;border-radius:8px;border:none;background:var(--steel);color:#fff;font-weight:700;" id="addSupervisorBtn">Agregar</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><h2>Respaldo y exportación</h2></div>
+      <div class="card-pad" style="display:flex;gap:10px;">
+        <button class="btn btn-secondary" id="btnExport" style="flex:1;">⬇ Respaldo JSON</button>
+        <button class="btn btn-secondary" id="btnExportCSV" style="flex:1;">📊 Exportar CSV</button>
+      </div>
+      <div class="card-pad" style="padding-top:0;">
+        <label class="btn btn-secondary" style="width:100%;text-align:center;display:block;">
+          ⬆ Importar respaldo
+          <input type="file" accept="application/json" id="fileImport" style="display:none;">
+        </label>
+      </div>
+      <div class="card-pad" style="padding-top:0;">
+        <p style="font-size:11.5px;color:var(--muted);line-height:1.4;margin:0;">
+          Los registros se guardan siempre en este dispositivo/navegador, aunque tengas la sincronización activada.
+          Exporta un respaldo cada cierto tiempo y guárdalo en Archivos, correo o WhatsApp.
+        </p>
       </div>
     </div>
   </section>
@@ -4023,6 +4028,8 @@ let plannedSnapshot = null;   // foto de la pauta usada en este registro (se gua
 let entregaState = {};        // { 0:true, 1:false, ... }
 let sigData = { sigTecnico:null, sigSupervisor:null };
 let histFilter = 'todos';
+let histDateFrom = '';
+let histDateTo = '';
 
 function itemKey(secKey, i){ return secKey + '-' + i; }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
@@ -5652,6 +5659,18 @@ document.getElementById('histSearch').addEventListener('input', (e) => {
   histSearchTerm = e.target.value.trim().toLowerCase();
   loadHistory();
 });
+document.getElementById('histDateFrom').addEventListener('change', (e) => { histDateFrom = e.target.value; loadHistory(); });
+document.getElementById('histDateTo').addEventListener('change', (e) => { histDateTo = e.target.value; loadHistory(); });
+document.getElementById('btnUltimos7').addEventListener('click', () => {
+  const toISO = d => d.toISOString().slice(0,10);
+  const hoy = new Date();
+  const hace7 = new Date(hoy.getTime() - 7*24*60*60*1000);
+  histDateFrom = toISO(hace7);
+  histDateTo = toISO(hoy);
+  document.getElementById('histDateFrom').value = histDateFrom;
+  document.getElementById('histDateTo').value = histDateTo;
+  loadHistory();
+});
 
 async function loadHistory(){
   const list = document.getElementById('histList');
@@ -5681,6 +5700,8 @@ async function loadHistory(){
       (x.ninforme||'').toLowerCase().includes(histSearchTerm)
     );
   }
+  if(histDateFrom){ idx = idx.filter(x => (x.fecha||'') >= histDateFrom); }
+  if(histDateTo){ idx = idx.filter(x => (x.fecha||'') <= histDateTo); }
   const remotosFiltrados = remotos.filter(r => {
     if(histFilter !== 'todos'){
       const esInspeccion = (r.tipoServicio||'').toLowerCase().includes('inspecc');
@@ -5691,21 +5712,35 @@ async function loadHistory(){
       const hay = (r.equipo||'').toLowerCase().includes(histSearchTerm) || (r.serie||'').toLowerCase().includes(histSearchTerm) || (r.nroInforme||'').toLowerCase().includes(histSearchTerm);
       if(!hay) return false;
     }
+    if(histDateFrom && (r.fecha||'') < histDateFrom) return false;
+    if(histDateTo && (r.fecha||'') > histDateTo) return false;
     return true;
   });
 
   if(!idx.length && !remotosFiltrados.length){ list.innerHTML = `<div class="empty-state">Sin registros que coincidan.</div>`; return; }
 
-  const localesHTML = idx.map(item => `<div style="display:flex;align-items:center;">
-      <div style="flex:1;">${historyRowHTML(item)}</div>
-      <button class="hist-del" data-del="${item.id}" style="margin-right:10px;">🗑</button>
-    </div>`).join('');
-  const remotosHTML = await Promise.all(remotosFiltrados.map(async r => `<div style="display:flex;align-items:center;">
-      <div style="flex:1;">${await remoteRowHTML(r)}</div>
-      <button class="hist-del" data-delremote="${esc(r.id)}" style="margin-right:10px;">🗑</button>
-    </div>`));
+  // §77.3 — una sola lista cronológica real, ordenada por fecha del servicio
+  // (no por origen local/remoto ni por savedAt/updatedAt).
+  const combinados = [
+    ...idx.map(item => ({ tipo:'local', fecha: item.fecha||'', data: item })),
+    ...remotosFiltrados.map(r => ({ tipo:'remoto', fecha: r.fecha||'', data: r }))
+  ];
+  combinados.sort((a,b) => (b.fecha||'').localeCompare(a.fecha||''));
 
-  list.innerHTML = localesHTML + remotosHTML.join('');
+  const filasHTML = await Promise.all(combinados.map(async c => {
+    if(c.tipo === 'local'){
+      return `<div style="display:flex;align-items:center;">
+      <div style="flex:1;">${historyRowHTML(c.data)}</div>
+      <button class="hist-del" data-del="${c.data.id}" style="margin-right:10px;">🗑</button>
+    </div>`;
+    }
+    return `<div style="display:flex;align-items:center;">
+      <div style="flex:1;">${await remoteRowHTML(c.data)}</div>
+      <button class="hist-del" data-delremote="${esc(c.data.id)}" style="margin-right:10px;">🗑</button>
+    </div>`;
+  }));
+
+  list.innerHTML = filasHTML.join('');
   list.querySelectorAll('[data-open]').forEach(el => el.addEventListener('click', () => loadRecordIntoForm(el.dataset.open)));
   list.querySelectorAll('[data-remote]').forEach(el => el.addEventListener('click', () => openRemoteDetail(el.dataset.remote)));
   list.querySelectorAll('[data-del]').forEach(el => el.addEventListener('click', async (e) => {
@@ -6482,7 +6517,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v8'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v9'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;

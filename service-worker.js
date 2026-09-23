@@ -1,4 +1,4 @@
-const CACHE = 'mantenimiento-compresores-ant-v8';
+const CACHE = 'mantenimiento-compresores-ant-v9';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
