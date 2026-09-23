@@ -5214,7 +5214,7 @@ async function saveRecord(){
     toast('✓ Guardado (' + sizeKB + ' KB)');
     intentarSincronizar(rec); // en segundo plano, no bloquea el guardado local
     clearDraft();
-    return true;
+    return rec;
   }catch(err){ console.error(err); toast('✕ Error al guardar: ' + err.message); return false; }
 }
 async function updateIndex(rec){
@@ -5323,7 +5323,7 @@ async function subirPdfRemoto(rec){
   const ot = String(rec.ot || '').trim();
   if(!/^\d+$/.test(ot)) return { ok:false, reason:'ot_requerida' };
   try{
-    const doc = await generarInformePDF();
+    const doc = await generarInformePDF(rec);
     const base64 = doc.output('datauristring');
     const filename = formatFilenamePDF({
       ot,
@@ -6002,12 +6002,12 @@ function buildInformeFilename(){
 }
 
 document.getElementById('btnPrint').addEventListener('click', async () => {
-  const guardadoOk = await saveRecord();
-  if(!guardadoOk) return; // no generar informe si el guardado fue bloqueado (ej. falta foto/justificación)
+  const rec = await saveRecord();
+  if(!rec) return; // no generar informe si el guardado fue bloqueado (ej. falta foto/justificación)
   toast('Generando PDF…');
   const filename = buildInformeFilename();
   try{
-    const doc = await generarInformePDF();
+    const doc = await generarInformePDF(rec);
     const blob = doc.output('blob');
     const file = new File([blob], filename, { type: 'application/pdf' });
     // navigator.share con archivo -> el nombre queda fijo de verdad (no depende de ningún título de página),
@@ -6081,35 +6081,48 @@ function pdfSectionTitle(doc, y, marginX, texto){
   return y + 10;
 }
 
-async function generarInformePDF(){
+async function generarInformePDF(rec){
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit:'mm', format:'a4' });
   const pageW = doc.internal.pageSize.getWidth();
   const marginX = 14;
   let y = 15;
 
-  const servicioLabel = currentServicio === 'inspeccion' ? 'INSPECCIÓN' : 'MANTENCIÓN';
-  const ninforme = document.getElementById('f_ninforme').value || '—';
-  const ot = document.getElementById('f_ot').value || '—';
-  const fecha = document.getElementById('f_fecha').value || '—';
-  const area = document.getElementById('f_area').value || '—';
-  const tiposervicio = document.getElementById('f_tiposervicio').value || '—';
-  const tecnico = getTecnicosValue() || '—';
-  const supervisor = document.getElementById('f_supervisor').value || '—';
-  const horainicio = document.getElementById('f_horainicio').value || '—';
-  const horatermino = document.getElementById('f_horatermino').value || '—';
-  const marca = document.getElementById('f_marca').value || '—';
-  const modelo = document.getElementById('f_modelo').value || '—';
-  const serie = document.getElementById('f_serie').value || '—';
-  const interno = document.getElementById('f_interno').value || '—';
-  const ubicacion = document.getElementById('f_ubicacion').value || '—';
-  const horometro = document.getElementById('f_horometro').value || '—';
-  const hallazgos = document.getElementById('f_hallazgos').value.trim();
-  const entregadoA = document.getElementById('f_entregadoA').value || '—';
-  const cargo = document.getElementById('f_cargo').value || '—';
+  // A partir de aquí, TODO sale de `rec` (el registro ya guardado), nunca del DOM ni de
+  // variables globales del formulario en pantalla — así el PDF queda fijo con los datos
+  // correctos aunque el usuario ya haya abierto un formulario nuevo antes de que esta
+  // función termine de correr (se llama en segundo plano desde subirPdfRemoto()).
+  const esInspeccion = rec.servicio === 'inspeccion';
+  const servicioLabel = esInspeccion ? 'INSPECCIÓN' : 'MANTENCIÓN';
+  const ninforme = rec.ninforme || '—';
+  const ot = rec.ot || '—';
+  const fecha = rec.fecha || '—';
+  const area = rec.area || '—';
+  const tiposervicio = rec.tiposervicio || '—';
+  const tecnico = rec.tecnico || '—';
+  const supervisor = rec.supervisor || '—';
+  const horainicio = rec.horainicio || '—';
+  const horatermino = rec.horatermino || '—';
+  const marca = rec.marca || '—';
+  const modelo = rec.modelo || '—';
+  const serie = rec.serie || '—';
+  const interno = rec.interno || '—';
+  const ubicacion = rec.ubicacion || '—';
+  const horometro = rec.horometro || '—';
+  const hallazgos = (rec.hallazgos || '').trim();
+  const entregadoA = rec.entregadoA || '—';
+  const cargo = rec.cargo || '—';
 
-  const equipoSel = equipos.find(e => e.id === document.getElementById('f_equipo').value);
-  const equipoNombre = equipoSel ? equipoSel.nombre : (interno !== '—' ? interno : 'Equipo');
+  const itemState = rec.items || {};
+  const photoState = rec.photos || {};
+  const plannedState = rec.plannedState || {};
+  const repuestosUsados = rec.repuestosUsados || [];
+  const repuestosRec = rec.repuestosRec || [];
+  const entregaState = rec.entrega || [];
+  const sigData = { sigTecnico: rec.sigTecnico || null, sigSupervisor: rec.sigSupervisor || null };
+
+  const equipoSel = equipos.find(e => e.id === rec.equipoId);
+  const equipoNombre = rec.equipoNombre || (interno !== '—' ? interno : 'Equipo');
   const counts = summarizeItems(itemState);
   const estado = computeEquipoEstado(itemState);
 
@@ -6140,7 +6153,6 @@ async function generarInformePDF(){
   doc.setFont('helvetica','normal');
 
   let secNum = 2;
-  const esInspeccion = currentServicio === 'inspeccion';
   // Detalle de la intervención: checklist + repuestos programados, en el MISMO orden
   // que aparecen en la app real (Seguridad → Repuestos programados → Componentes → Puesta en
   // marcha), cada ítem con su resultado y su foto justo debajo — no separado al final.
@@ -6186,10 +6198,10 @@ async function generarInformePDF(){
 
   const RESULTADO_COLOR = { bueno:[46,125,50], regular:[230,150,10], malo:[190,40,40], na:[130,130,130], realizado:[46,125,50], no_realizado:[190,40,40] };
   let huboDetalle = false;
-  const planSnapshot = plannedSnapshot || buildPlannedSnapshot(equipoSel);
+  const planSnapshot = rec.maintenancePlanSnapshot || (equipoSel ? buildPlannedSnapshot(equipoSel) : null);
   const tienePlan = equipoSel && getMaintenanceKey(equipoSel) && planSnapshot && planSnapshot.items;
 
-  for(const sec of itemsForServicio(currentServicio)){
+  for(const sec of itemsForServicio(rec.servicio)){
     if(esInspeccion) y = pdfSectionTitle(doc, y, marginX, secNum++ + '. ' + sec.title);
     for(let i=0; i<sec.items.length; i++){
       const rawItem = sec.items[i];
@@ -6518,7 +6530,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v10'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v11'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
