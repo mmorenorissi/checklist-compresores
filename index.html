@@ -3031,8 +3031,9 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
           <button class="btn btn-secondary" id="btnSyncNow" style="flex:1;">🔄 Sincronizar pendientes</button>
         </div>
         <p style="font-size:11px;color:var(--muted);line-height:1.4;margin:10px 0 0;">
-          Por ahora se sincronizan los datos de cada checklist (equipo, estados, observaciones) — las fotos y firmas
-          quedan solo en el dispositivo que las tomó, eso lo sumamos en una siguiente etapa.
+          Los datos del checklist se sincronizan con el historial compartido.
+          Las fotos y firmas no se almacenan por separado en Sheets; quedan
+          incorporadas en el PDF del informe que se sube a Drive.
         </p>
       </div>
     </div>
@@ -5569,7 +5570,7 @@ async function openRemoteDetail(id){
     } else {
       html += `<p style="color:var(--muted);font-style:italic;">Este registro es anterior a la sincronización de detalle, o no se pudo reconstruir el detalle completo.</p>`;
     }
-    html += `<p style="margin-top:14px;font-size:11px;color:var(--muted);">📷 Las fotos de este registro quedaron solo en el dispositivo que las tomó.</p>`;
+    html += `<p style="margin-top:14px;font-size:11px;color:var(--muted);">📷 Las fotos y firmas de este registro quedan incorporadas en el PDF del informe.</p>`;
     body.innerHTML = html;
   }catch(e){ body.innerHTML = 'Error al cargar el registro.'; }
 }
@@ -6480,7 +6481,7 @@ async function exportCSV(){
     const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = `inspecciones_compresores_ant_${todayISO()}.csv`;
+    a.href = url; a.download = `registros_compresores_ant_${todayISO()}.csv`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     URL.revokeObjectURL(url);
     toast('✓ CSV descargado (' + rows.length + ' registros)');
@@ -6517,7 +6518,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v9'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v10'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
