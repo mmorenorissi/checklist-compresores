@@ -2821,7 +2821,8 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
     <div id="draftBanner" style="display:none;margin-bottom:12px;background:var(--regular-bg);border:1.5px solid var(--regular);border-radius:10px;padding:12px 14px;"></div>
 
     <button class="btn-full" style="background:var(--steel);color:#fff;padding:16px;font-size:15.5px;margin-bottom:10px;" id="choiceMtto" data-servicio="mtto">🛠️ Iniciar Mantención</button>
-    <button class="btn-full" style="background:var(--steel);color:#fff;padding:16px;font-size:15.5px;margin-bottom:14px;" id="choiceInspeccion" data-servicio="inspeccion">🔍 Iniciar Inspección</button>
+    <button class="btn-full" style="background:var(--steel);color:#fff;padding:16px;font-size:15.5px;margin-bottom:10px;" id="choiceInspeccion" data-servicio="inspeccion">🔍 Iniciar Inspección</button>
+    <button class="btn-full" style="background:var(--steel);color:#fff;padding:16px;font-size:15.5px;margin-bottom:14px;" id="choiceCorrectivo" data-servicio="correctivo">🚨 Iniciar Mantenimiento Correctivo</button>
 
     <div class="card">
       <div class="card-head"><h2>Últimos registros</h2></div>
@@ -2922,6 +2923,26 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
 
     <div id="sectionsWrap"></div>
 
+    <div class="card" id="cardCorrectivo" style="display:none;">
+      <div class="card-head"><h2>Trabajo correctivo / emergente</h2></div>
+      <div class="card-pad">
+        <div class="field" style="margin-bottom:10px;">
+          <label>Problema detectado / falla</label>
+          <textarea id="f_correctivoProblema" rows="3" placeholder="¿Qué falló?" style="width:100%;border:1.5px solid var(--line);border-radius:8px;padding:9px 11px;font-family:var(--font-body);font-size:14px;"></textarea>
+        </div>
+        <div class="field" style="margin-bottom:10px;">
+          <label>Trabajo realizado / solución aplicada</label>
+          <textarea id="f_correctivoTrabajo" rows="3" placeholder="¿Qué se hizo para solucionarlo?" style="width:100%;border:1.5px solid var(--line);border-radius:8px;padding:9px 11px;font-family:var(--font-body);font-size:14px;"></textarea>
+        </div>
+        <div class="field" style="margin-bottom:10px;">
+          <label>Desviaciones (opcional)</label>
+          <textarea id="f_correctivoDesviaciones" rows="2" placeholder="¿Algo distinto al procedimiento habitual?" style="width:100%;border:1.5px solid var(--line);border-radius:8px;padding:9px 11px;font-family:var(--font-body);font-size:14px;"></textarea>
+        </div>
+        <label style="font-size:12.5px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px;">Fotos de evidencia</label>
+        <div id="correctivoPhotos" class="photo-row"></div>
+      </div>
+    </div>
+
     <div class="card" id="cardRepuestosUsados">
       <div class="card-head"><h2>Repuestos y materiales utilizados</h2></div>
       <div class="card-pad">
@@ -3003,6 +3024,7 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
         <div class="filter-chip active" data-f="todos">Todos</div>
         <div class="filter-chip" data-f="inspeccion">Inspección</div>
         <div class="filter-chip" data-f="mtto">Mantención</div>
+        <div class="filter-chip" data-f="correctivo">Correctivo</div>
       </div>
       <div class="card-pad" style="padding-top:8px;padding-bottom:0;display:flex;gap:8px;align-items:end;flex-wrap:wrap;">
         <div class="field" style="flex:1;min-width:120px;margin-bottom:8px;"><label>Desde</label><input type="date" id="histDateFrom"></div>
@@ -3946,7 +3968,22 @@ const ENTREGA_ITEMS = [
   'Equipo probado y en condiciones de operar'
 ];
 
-function itemsForServicio(servicio){ return servicio === 'inspeccion' ? buildInspeccionPauta() : buildMttoPauta(); }
+function itemsForServicio(servicio){
+  if(servicio === 'inspeccion') return buildInspeccionPauta();
+  if(servicio === 'correctivo') return buildCorrectivoPauta();
+  return buildMttoPauta();
+}
+// Mantenimiento Correctivo (§79 del estándar) — solo reutiliza el checklist de
+// Seguridad y Bloqueo; el resto del contenido técnico vive en la sección nueva
+// "Trabajo correctivo / emergente" (texto libre + fotos), no en un checklist fijo.
+function buildCorrectivoPauta(){
+  return [
+    { key:'seguridad', title:'SEGURIDAD Y BLOQUEO', items: MTTO_SEGURIDAD }
+  ];
+}
+function servicioLabelCorto(servicio){
+  return servicio === 'inspeccion' ? 'Inspección' : servicio === 'correctivo' ? 'Correctivo' : 'Mantención';
+}
 
 /* ============================================================
    ALMACENAMIENTO PROPIO (IndexedDB) — independiente, en este dispositivo.
@@ -4158,6 +4195,7 @@ async function goToView(name){
    ============================================================ */
 document.getElementById('choiceInspeccion').addEventListener('click', () => startNewForm('inspeccion'));
 document.getElementById('choiceMtto').addEventListener('click', () => startNewForm('mtto'));
+document.getElementById('choiceCorrectivo').addEventListener('click', () => startNewForm('correctivo'));
 
 function populateAreaSelectPlain(id){
   const sel = document.getElementById(id);
@@ -4316,8 +4354,10 @@ function applyEquipoToForm(equipo){
 // elegido — aplica a Mantención (equipo+intervalo) e Inspección (equipo, ya
 // que motor diésel/eléctrico y componentes dependen de la categoría).
 function rebuildMttoPautaIfNeeded(){
+  const fotosCorrectivo = photoState['correctivo']; // no forman parte de itemsForServicio(); se pierden si no se preservan a mano
   itemState = blankItemState(currentServicio);
   photoState = blankPhotoState(currentServicio);
+  if(fotosCorrectivo) photoState['correctivo'] = fotosCorrectivo;
   renderSections();
   updateSummary();
 }
@@ -4627,7 +4667,7 @@ async function renderDraftBanner(){
   try{ draft = await storage.get(DRAFT_KEY); }catch(e){}
   if(!draft){ box.style.display = 'none'; return; }
   const equipo = equipos.find(e => e.id === draft.equipoId);
-  const servicioLabel = draft.servicio === 'inspeccion' ? 'Inspección' : 'Mantención';
+  const servicioLabel = servicioLabelCorto(draft.servicio);
   const fecha = draft.draftSavedAt ? new Date(draft.draftSavedAt).toLocaleString('es-CL') : '';
   box.style.display = 'block';
   box.innerHTML = `
@@ -4657,7 +4697,7 @@ async function resumeDraft(draft){
   plannedSnapshot = draft.maintenancePlanSnapshot || null;
   sigData.sigTecnico = draft.sigTecnico; sigData.sigSupervisor = draft.sigSupervisor;
 
-  document.getElementById('formTitle').textContent = draft.servicio === 'inspeccion' ? 'Inspección' : 'Mantención';
+  document.getElementById('formTitle').textContent = servicioLabelCorto(draft.servicio);
   document.getElementById('recIdLabel').textContent = 'borrador recuperado';
   document.getElementById('btnDelete').style.display = 'none';
   document.getElementById('f_intervaloWrap').style.display = draft.servicio === 'mtto' ? 'block' : 'none';
@@ -4691,6 +4731,9 @@ async function resumeDraft(draft){
   document.getElementById('f_hallazgos').value = draft.hallazgos || '';
   document.getElementById('f_entregadoA').value = draft.entregadoA || '';
   document.getElementById('f_cargo').value = draft.cargo || '';
+  document.getElementById('f_correctivoProblema').value = draft.correctivoProblema || '';
+  document.getElementById('f_correctivoTrabajo').value = draft.correctivoTrabajo || '';
+  document.getElementById('f_correctivoDesviaciones').value = draft.correctivoDesviaciones || '';
 
   renderSections(); renderRepuestosUsados(); renderRepuestosRec(); renderEntregaChecklist(); updateSummary();
   goToView('form');
@@ -4722,7 +4765,7 @@ function startNewForm(servicio){
   plannedState = {};
   plannedSnapshot = null;
 
-  document.getElementById('formTitle').textContent = servicio === 'inspeccion' ? 'Inspección' : 'Mantención';
+  document.getElementById('formTitle').textContent = servicioLabelCorto(servicio);
   document.getElementById('recIdLabel').textContent = 'registro nuevo';
   document.getElementById('btnDelete').style.display = 'none';
   document.getElementById('f_intervaloWrap').style.display = servicio === 'mtto' ? 'block' : 'none';
@@ -4743,7 +4786,7 @@ function startNewForm(servicio){
   delete ninformeEl.dataset.autofolio;
   document.getElementById('f_ot').value = '';
   document.getElementById('f_fecha').value = todayISO();
-  document.getElementById('f_tiposervicio').value = servicio === 'inspeccion' ? 'INSPECCIÓN GENERAL' : 'MANTENCIÓN';
+  document.getElementById('f_tiposervicio').value = servicio === 'inspeccion' ? 'INSPECCIÓN GENERAL' : servicio === 'correctivo' ? 'MANTENIMIENTO CORRECTIVO' : 'MANTENCIÓN';
   renderTecnicoRows([]);
   populateSupervisorSelect('');
   populateCompletadoPorSelect('');
@@ -4754,6 +4797,9 @@ function startNewForm(servicio){
   document.getElementById('f_hallazgos').value = '';
   document.getElementById('f_entregadoA').value = '';
   document.getElementById('f_cargo').value = '';
+  document.getElementById('f_correctivoProblema').value = '';
+  document.getElementById('f_correctivoTrabajo').value = '';
+  document.getElementById('f_correctivoDesviaciones').value = '';
 
   clearSignatureCanvas('sigTecnico');
   clearSignatureCanvas('sigSupervisor');
@@ -4885,6 +4931,11 @@ function handlePhotoFiles(files, key, container, onChange){
 }
 function openPhotoModal(src){ document.getElementById('photoModalImg').src = src; document.getElementById('photoModal').classList.add('show'); }
 document.getElementById('photoModal').addEventListener('click', () => document.getElementById('photoModal').classList.remove('show'));
+// Fotos de la sección "Trabajo correctivo / emergente" (§79.4) — reutiliza el
+// mismo mecanismo de photoState que el checklist, con la clave fija 'correctivo'.
+function renderCorrectivoPhotos(){
+  renderPhotos(document.getElementById('correctivoPhotos'), 'correctivo', renderCorrectivoPhotos);
+}
 
 function computeEquipoEstado(items){
   const valores = Object.values(items);
@@ -4987,11 +5038,15 @@ document.getElementById('addRepuestoRec').addEventListener('click', () => { repu
 /* ---- entrega del equipo ---- */
 function renderEntregaChecklist(){
   const esInspeccion = currentServicio === 'inspeccion';
-  document.getElementById('cardRepuestosUsados').style.display = esInspeccion ? 'none' : '';
+  const esCorrectivo = currentServicio === 'correctivo';
+  const ocultarRepuestos = esInspeccion || esCorrectivo; // §79.3 — Correctivo tampoco usa Repuestos
+  document.getElementById('cardRepuestosUsados').style.display = ocultarRepuestos ? 'none' : '';
   document.getElementById('cardObservaciones').style.display = esInspeccion ? 'none' : '';
-  document.getElementById('cardRepuestosRec').style.display = esInspeccion ? 'none' : '';
+  document.getElementById('cardRepuestosRec').style.display = ocultarRepuestos ? 'none' : '';
+  document.getElementById('cardCorrectivo').style.display = esCorrectivo ? '' : 'none';
+  if(esCorrectivo) renderCorrectivoPhotos();
   // en Inspección, "Estado inicial" y "Hallazgo/anomalía" ahora viven en el checklist principal
-  // (sectionsWrap), con foto/observación — este casillero clásico queda solo para Mantención.
+  // (sectionsWrap), con foto/observación — este casillero clásico queda solo para Mantención y Correctivo.
   document.getElementById('entregaItems').style.display = esInspeccion ? 'none' : '';
   document.getElementById('sigBoxSupervisor').style.display = esInspeccion ? 'none' : '';
   if(esInspeccion) return;
@@ -5100,6 +5155,9 @@ function buildRecord(){
     entregadoA: document.getElementById('f_entregadoA').value,
     cargo: document.getElementById('f_cargo').value,
     hallazgos: document.getElementById('f_hallazgos').value,
+    correctivoProblema: document.getElementById('f_correctivoProblema').value,
+    correctivoTrabajo: document.getElementById('f_correctivoTrabajo').value,
+    correctivoDesviaciones: document.getElementById('f_correctivoDesviaciones').value,
     sigTecnico: sigData.sigTecnico,
     sigSupervisor: sigData.sigSupervisor
   };
@@ -5192,6 +5250,16 @@ async function saveRecord(){
   const equipoId = document.getElementById('f_equipo').value;
   if(!equipoId){ toast('✕ Selecciona un equipo antes de guardar.'); return false; }
   if(!document.getElementById('f_completadoPor').value){ toast('✕ Falta indicar quién completa este registro (arriba de todo).'); return false; }
+  if(currentServicio === 'correctivo'){
+    if(!document.getElementById('f_correctivoProblema').value.trim()){
+      toast('✕ Falta describir el problema/falla detectada.');
+      return false;
+    }
+    if(!document.getElementById('f_correctivoTrabajo').value.trim()){
+      toast('✕ Falta describir el trabajo realizado.');
+      return false;
+    }
+  }
 
   const rec = buildRecord();
   currentId = rec.id;
@@ -5519,7 +5587,8 @@ async function remoteRowHTML(item){
   const equipo = item.equipo || item.modelo || 'Equipo';
   const estado = (item.estado || '').toUpperCase();
   const cls = estado.includes('NO OPERATIVO') || estado.includes('CRÍTICO') ? 'malo' : estado.includes('OBSERVACION') ? 'regular' : 'bueno';
-  const servicioLabel = (item.tipoServicio||'').toLowerCase().includes('inspecc') ? 'Inspección' : 'Mantención';
+  const tipoTxt = (item.tipoServicio||'').toLowerCase();
+  const servicioLabel = tipoTxt.includes('correctiv') ? 'Correctivo' : tipoTxt.includes('inspecc') ? 'Inspección' : 'Mantención';
   const pdfIcon = item.pdfUrl ? `<a href="${esc(item.pdfUrl)}" target="_blank" onclick="event.stopPropagation()" title="Abrir PDF en Drive">📄</a>` : '';
   return `<div class="hist-item" data-remote="${esc(item.id)}">
     <div class="hist-badge" style="background:var(--steel);">🌐</div>
@@ -5586,7 +5655,7 @@ async function loadRecordIntoForm(id){
   plannedState = rec.plannedState || {};
   sigData.sigTecnico = rec.sigTecnico; sigData.sigSupervisor = rec.sigSupervisor;
 
-  document.getElementById('formTitle').textContent = rec.servicio === 'inspeccion' ? 'Inspección' : 'Mantención';
+  document.getElementById('formTitle').textContent = servicioLabelCorto(rec.servicio);
   document.getElementById('recIdLabel').textContent = 'guardado · ' + rec.id;
   document.getElementById('btnDelete').style.display = 'block';
   document.getElementById('f_intervaloWrap').style.display = rec.servicio === 'mtto' ? 'block' : 'none';
@@ -5625,6 +5694,9 @@ async function loadRecordIntoForm(id){
   document.getElementById('f_hallazgos').value = rec.hallazgos || '';
   document.getElementById('f_entregadoA').value = rec.entregadoA || '';
   document.getElementById('f_cargo').value = rec.cargo || '';
+  document.getElementById('f_correctivoProblema').value = rec.correctivoProblema || '';
+  document.getElementById('f_correctivoTrabajo').value = rec.correctivoTrabajo || '';
+  document.getElementById('f_correctivoDesviaciones').value = rec.correctivoDesviaciones || '';
 
   renderSections(); renderRepuestosUsados(); renderRepuestosRec(); renderEntregaChecklist(); updateSummary();
   goToView('form');
@@ -5638,12 +5710,13 @@ document.querySelectorAll('.filter-chip').forEach(chip => {
   chip.addEventListener('click', () => { histFilter = chip.dataset.f; document.querySelectorAll('.filter-chip').forEach(c=>c.classList.toggle('active', c===chip)); loadHistory(); });
 });
 function historyRowHTML(item){
-  const badgeText = (item.equipoLabel||'').replace(/[^0-9]/g,'').slice(-2) || (item.servicio==='inspeccion'?'IN':'MT');
+  const codigoServicio = item.servicio === 'inspeccion' ? 'IN' : item.servicio === 'correctivo' ? 'CO' : 'MT';
+  const badgeText = (item.equipoLabel||'').replace(/[^0-9]/g,'').slice(-2) || codigoServicio;
   let cls = 'bueno', chipText = 'Operativo';
   if(item.criticoAlta > 0){ cls = 'malo'; chipText = 'Crítico'; }
   else if(item.malo > 0){ cls = 'regular'; chipText = item.malo + ' con obs.'; }
   else if(item.regular > 0){ cls = 'regular'; chipText = 'Con observaciones'; }
-  const servicioLabel = item.servicio === 'inspeccion' ? 'Inspección' : 'Mantención';
+  const servicioLabel = servicioLabelCorto(item.servicio);
   const syncIcon = item.syncStatus === 'sincronizado' ? '☁️' : item.syncStatus === 'pendiente' ? '⏳' : '';
   const pdfIcon = item.pdfUrl ? `<a href="${esc(item.pdfUrl)}" target="_blank" onclick="event.stopPropagation()" title="Abrir PDF en Drive">📄</a>` : '';
   return `<div class="hist-item" data-open="${item.id}">
@@ -5705,8 +5778,8 @@ async function loadHistory(){
   if(histDateTo){ idx = idx.filter(x => (x.fecha||'') <= histDateTo); }
   const remotosFiltrados = remotos.filter(r => {
     if(histFilter !== 'todos'){
-      const esInspeccion = (r.tipoServicio||'').toLowerCase().includes('inspecc');
-      const servicioRemoto = esInspeccion ? 'inspeccion' : 'mtto';
+      const tipo = (r.tipoServicio||'').toLowerCase();
+      const servicioRemoto = tipo.includes('correctiv') ? 'correctivo' : tipo.includes('inspecc') ? 'inspeccion' : 'mtto';
       if(servicioRemoto !== histFilter) return false;
     }
     if(histSearchTerm){
@@ -5979,7 +6052,7 @@ document.getElementById('btnDelete').addEventListener('click', async () => {
   }
 });
 function formatFilenamePDF({ ot, servicio, intervalo, equipoNombre, fecha }){
-  const servicioLabel = servicio === 'inspeccion' ? 'Inspección' : 'Mantención';
+  const servicioLabel = servicioLabelCorto(servicio);
   const intervaloClean = (servicio === 'mtto' && intervalo) ? String(intervalo).replace(/[.\s]/g,'') : '';
   const otClean = String(ot || '').trim();
   let fechaFmt = fecha;
@@ -6026,7 +6099,7 @@ document.getElementById('btnCompartir').addEventListener('click', async () => {
   const equipoNombre = equipoSel ? equipoSel.nombre : 'Equipo';
   const counts = summarizeItems(itemState);
   const estado = computeEquipoEstado(itemState);
-  const servicioLabel = currentServicio === 'inspeccion' ? 'Inspección' : 'Mantención';
+  const servicioLabel = servicioLabelCorto(currentServicio);
   const ninforme = document.getElementById('f_ninforme').value || 's/n';
   const fecha = document.getElementById('f_fecha').value || '—';
   const horometro = document.getElementById('f_horometro').value || '—';
@@ -6093,7 +6166,8 @@ async function generarInformePDF(rec){
   // correctos aunque el usuario ya haya abierto un formulario nuevo antes de que esta
   // función termine de correr (se llama en segundo plano desde subirPdfRemoto()).
   const esInspeccion = rec.servicio === 'inspeccion';
-  const servicioLabel = esInspeccion ? 'INSPECCIÓN' : 'MANTENCIÓN';
+  const esCorrectivo = rec.servicio === 'correctivo';
+  const servicioLabel = esInspeccion ? 'INSPECCIÓN' : esCorrectivo ? 'MANTENIMIENTO CORRECTIVO' : 'MANTENCIÓN';
   const ninforme = rec.ninforme || '—';
   const ot = rec.ot || '—';
   const fecha = rec.fecha || '—';
@@ -6233,9 +6307,46 @@ async function generarInformePDF(rec){
   }
   y += 3;
 
-  // Repuestos y materiales utilizados — no aplica en Inspección (no hay cambio de repuestos)
+  // Trabajo correctivo / emergente — solo para Mantenimiento Correctivo (§79.4)
+  if(esCorrectivo){
+    y = pdfSectionTitle(doc, y, marginX, secNum++ + '. TRABAJO CORRECTIVO / EMERGENTE');
+    doc.setFontSize(9);
+    const bloquesCorrectivo = [
+      ['Problema detectado / falla:', rec.correctivoProblema],
+      ['Trabajo realizado / solución aplicada:', rec.correctivoTrabajo],
+      ['Desviaciones:', rec.correctivoDesviaciones]
+    ];
+    bloquesCorrectivo.forEach(([titulo, texto]) => {
+      if(!(texto||'').trim()) return;
+      doc.setFont('helvetica','bold');
+      y = pdfEnsureSpace(doc, y, 6);
+      doc.text(titulo, marginX, y); y += 4.5;
+      doc.setFont('helvetica','normal');
+      const lineas = doc.splitTextToSize(texto.trim(), pageW - marginX*2);
+      y = pdfEnsureSpace(doc, y, lineas.length*4.5);
+      doc.text(lineas, marginX, y); y += lineas.length*4.5 + 4;
+    });
+    const fotosCorrectivo = (rec.photos && rec.photos['correctivo']) || [];
+    if(fotosCorrectivo.length){
+      const imgW = 55, gap = 4;
+      let x = marginX, rowMaxH = 0;
+      for(const photoUrl of fotosCorrectivo){
+        const dims = await getImageDims(photoUrl);
+        const imgH = Math.min(imgW * (dims.height/dims.width), 60);
+        if(x + imgW > pageW - marginX){ x = marginX; y += rowMaxH + gap; rowMaxH = 0; }
+        y = pdfEnsureSpace(doc, y, imgH + gap);
+        try{ doc.addImage(photoUrl, 'JPEG', x, y, imgW, imgH); }catch(err){ /* imagen inválida, se omite sin romper el resto */ }
+        x += imgW + gap;
+        rowMaxH = Math.max(rowMaxH, imgH);
+      }
+      y += rowMaxH + 6;
+    }
+    y += 3;
+  }
+
+  // Repuestos y materiales utilizados — solo Mantención (Inspección y Correctivo no cambian repuestos)
   const rUsados = repuestosUsados.filter(r => (r.descripcion||'').trim());
-  if(!esInspeccion){
+  if(rec.servicio === 'mtto'){
     y = pdfSectionTitle(doc, y, marginX, secNum++ + '. REPUESTOS Y MATERIALES UTILIZADOS');
     if(rUsados.length){
       doc.autoTable({
@@ -6264,9 +6375,9 @@ async function generarInformePDF(rec){
   }
   }
 
-  // Repuestos recomendados próxima mantención — no aplica en Inspección
+  // Repuestos recomendados próxima mantención — solo Mantención
   const rRec = repuestosRec.filter(r => (r.descripcion||'').trim());
-  if(!esInspeccion){
+  if(rec.servicio === 'mtto'){
     y = pdfSectionTitle(doc, y, marginX, secNum++ + '. REPUESTOS E INSUMOS RECOMENDADOS PARA PRÓXIMAS MANTENCIONES');
     if(rRec.length){
       doc.autoTable({
@@ -6483,7 +6594,7 @@ async function exportCSV(){
       const counts = summarizeItems(rec.items || {});
       const naCount = Object.values(rec.items || {}).filter(s => s.status === 'na').length;
       const estado = computeEquipoEstado(rec.items || {});
-      const servicioLabel = rec.servicio === 'inspeccion' ? 'Inspección' : 'Mantención';
+      const servicioLabel = servicioLabelCorto(rec.servicio);
       lines.push([
         rec.ninforme, rec.fecha, servicioLabel, rec.interno || rec.modelo, rec.marca, rec.modelo, rec.serie,
         rec.horometro, rec.tecnico, rec.supervisor, estado.label, counts.bueno, counts.regular, counts.malo, naCount
@@ -6530,7 +6641,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v11'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v12'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
