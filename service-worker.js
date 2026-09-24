@@ -1,4 +1,5 @@
-const CACHE = 'mantenimiento-compresores-ant-v12';
+const CACHE_PREFIX = 'mantenimiento-compresores-ant-';
+const CACHE = CACHE_PREFIX + 'v14';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -15,7 +16,10 @@ self.addEventListener('activate', e => {
       .then(keys =>
         Promise.all(
           keys
-            .filter(k => k !== CACHE)
+            // Solo borra cachés propios de Compresores (mismo prefijo) — otras PWA
+            // ANT (Clima, Puentes Grúa) pueden compartir el mismo origen de GitHub
+            // Pages y no deben perder su caché offline por esta actualización.
+            .filter(k => k.startsWith(CACHE_PREFIX) && k !== CACHE)
             .map(k => caches.delete(k))
         )
       )
