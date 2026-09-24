@@ -4821,17 +4821,33 @@ function blankPhotoState(servicio){
 // corresponde elegir entre PM01/PM02, ni al revés.
 function actualizarClaseOrdenAuto(){
   const sel = document.getElementById('f_claseOrden');
+  const estadoOtSel = document.getElementById('f_estadoOt');
   const bloqueada = currentServicio === 'correctivo' || document.getElementById('f_origenTrabajo').value === 'no_programado';
   if(bloqueada){
     sel.innerHTML = '<option value="PM03">PM03</option>';
     sel.value = 'PM03';
     sel.disabled = true;
+    // PM03 (Correctivo o No programado) nunca puede quedar Reprogramada — regla
+    // operacional. Se fija Ejecutada y se saca "Reprogramada" del selector por
+    // completo (no solo disabled), para que sea físicamente imposible elegirla.
+    estadoOtSel.innerHTML = '<option value="ejecutada">Ejecutada</option>';
+    estadoOtSel.value = 'ejecutada';
+    estadoOtSel.disabled = true;
+    document.getElementById('f_motivoReprogramacion').value = '';
   } else {
     const valorPrevio = (sel.value === 'PM01' || sel.value === 'PM02') ? sel.value : '';
     sel.innerHTML = '<option value="">Selecciona…</option><option value="PM01">PM01</option><option value="PM02">PM02</option>';
     sel.value = valorPrevio;
     sel.disabled = false;
+    if(estadoOtSel.disabled){
+      // veníamos de PM03 bloqueado: vuelve a pedir una elección explícita,
+      // no arrastra el "ejecutada" que se había fijado automático.
+      estadoOtSel.innerHTML = '<option value="">Selecciona…</option><option value="ejecutada">Ejecutada</option><option value="reprogramada">Reprogramada</option>';
+      estadoOtSel.value = '';
+      estadoOtSel.disabled = false;
+    }
   }
+  aplicarEstadoOtVisibilidad();
 }
 document.getElementById('f_origenTrabajo').addEventListener('change', actualizarClaseOrdenAuto);
 
@@ -5329,6 +5345,10 @@ async function saveRecord(){
     toast('✕ Falta indicar el Estado de la OT (Ejecutada / Reprogramada).');
     return false;
   }
+  if(document.getElementById('f_claseOrden').value === 'PM03' && document.getElementById('f_estadoOt').value === 'reprogramada'){
+    toast('✕ Una OT PM03 no puede quedar Reprogramada. Las PM03 solo pueden registrarse como Ejecutadas.');
+    return false;
+  }
   const equipoId = document.getElementById('f_equipo').value;
   if(!equipoId){ toast('✕ Selecciona un equipo antes de guardar.'); return false; }
   if(!document.getElementById('f_completadoPor').value){ toast('✕ Falta indicar quién completa este registro (arriba de todo).'); return false; }
@@ -5427,7 +5447,7 @@ async function updateIndex(rec){
     id: rec.id, servicio: rec.servicio, equipoLabel: rec.equipoNombre || rec.interno || rec.modelo, marcaModelo: (rec.marca+' '+rec.modelo).trim(),
     serie: rec.serie, ninforme: rec.ninforme, equipoId: rec.equipoId, fecha: rec.fecha, savedAt: rec.savedAt, completadoPor: rec.completadoPor || '',
     malo: counts.malo, regular: counts.regular, bueno: counts.bueno, criticoAlta: counts.criticoAlta, syncStatus: rec.syncStatus || 'local', pdfUrl: rec.pdfUrl || null,
-    estadoOt: rec.estadoOt || ''
+    estadoOt: rec.estadoOt || '', claseOrden: rec.claseOrden || ''
   });
   await storage.set('registros_index', idx);
 }
@@ -5766,8 +5786,12 @@ async function remoteRowHTML(item){
   const fecha = item.fecha || '—';
   const equipo = item.equipo || item.modelo || 'Equipo';
   const esReprogramada = item.estadoOt === 'reprogramada';
-  const estado = esReprogramada ? 'REPROGRAMADA' : (item.estado || '').toUpperCase();
-  const cls = esReprogramada || estado.includes('NO OPERATIVO') || estado.includes('CRÍTICO') ? (esReprogramada ? 'regular' : 'malo') : estado.includes('OBSERVACION') ? 'regular' : 'bueno';
+  // PM03 + Reprogramada nunca debería poder guardarse desde v14 en adelante (bloqueado
+  // en UI y backend) — si aparece igual, es un registro legacy/inconsistente y se marca
+  // como advertencia en vez de mostrarlo como una Reprogramada normal (§9).
+  const inconsistentePM03 = esReprogramada && item.claseOrden === 'PM03';
+  const estado = inconsistentePM03 ? '⚠ PM03/REPROGRAMADA' : esReprogramada ? 'REPROGRAMADA' : (item.estado || '').toUpperCase();
+  const cls = inconsistentePM03 ? 'malo' : esReprogramada || estado.includes('NO OPERATIVO') || estado.includes('CRÍTICO') ? (esReprogramada ? 'regular' : 'malo') : estado.includes('OBSERVACION') ? 'regular' : 'bueno';
   const tipoTxt = (item.tipoServicio||'').toLowerCase();
   const servicioLabel = tipoTxt.includes('correctiv') ? 'Correctivo' : tipoTxt.includes('inspecc') ? 'Inspección' : 'Mantenimiento';
   const pdfIcon = item.pdfUrl ? `<a href="${esc(item.pdfUrl)}" target="_blank" onclick="event.stopPropagation()" title="Abrir PDF en Drive">📄</a>` : '';
@@ -5898,10 +5922,12 @@ document.querySelectorAll('.filter-chip').forEach(chip => {
 });
 function historyRowHTML(item){
   const esReprogramada = item.estadoOt === 'reprogramada';
+  const inconsistentePM03 = esReprogramada && item.claseOrden === 'PM03';
   const codigoServicio = item.servicio === 'inspeccion' ? 'IN' : item.servicio === 'correctivo' ? 'CO' : 'MT';
-  const badgeText = esReprogramada ? 'RP' : ((item.equipoLabel||'').replace(/[^0-9]/g,'').slice(-2) || codigoServicio);
+  const badgeText = esReprogramada ? (inconsistentePM03 ? '⚠' : 'RP') : ((item.equipoLabel||'').replace(/[^0-9]/g,'').slice(-2) || codigoServicio);
   let cls = 'bueno', chipText = 'Operativo';
-  if(esReprogramada){ cls = 'regular'; chipText = 'Reprogramada'; }
+  if(inconsistentePM03){ cls = 'malo'; chipText = '⚠ PM03/Reprogramada'; }
+  else if(esReprogramada){ cls = 'regular'; chipText = 'Reprogramada'; }
   else if(item.criticoAlta > 0){ cls = 'malo'; chipText = 'Crítico'; }
   else if(item.malo > 0){ cls = 'regular'; chipText = item.malo + ' con obs.'; }
   else if(item.regular > 0){ cls = 'regular'; chipText = 'Con observaciones'; }
@@ -6832,7 +6858,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v14'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v15'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
