@@ -3077,6 +3077,18 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
       </div>
       <div id="histList" style="margin-top:8px;"></div>
     </div>
+    <div class="modal-bg" id="conflictModal">
+      <div style="background:#fff;border-radius:12px;max-width:420px;width:100%;max-height:85vh;overflow-y:auto;padding:0;">
+        <div style="position:sticky;top:0;background:var(--malo);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;border-radius:12px 12px 0 0;">
+          <b style="font-family:var(--font-display);">⚠ Conflicto de sincronización</b>
+          <button id="btnCloseConflictModal" style="background:none;border:none;color:#fff;font-size:20px;">✕</button>
+        </div>
+        <div id="conflictModalBody" style="padding:16px;font-size:13.5px;line-height:1.6;white-space:pre-line;"></div>
+        <div style="padding:0 16px 16px;">
+          <button id="btnEntendidoConflicto" class="btn-full" style="background:var(--steel);color:#fff;">Entendido</button>
+        </div>
+      </div>
+    </div>
     <div class="modal-bg" id="remoteModal">
       <div style="background:#fff;border-radius:12px;max-width:480px;width:100%;max-height:85vh;overflow-y:auto;padding:0;">
         <div style="position:sticky;top:0;background:var(--graphite);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;border-radius:12px 12px 0 0;">
@@ -5546,9 +5558,10 @@ async function intentarSincronizar(rec){
   rec.syncStatus = status;
   if(status === 'conflict'){
     rec.conflictInfo = { message: resultado.message, existing: resultado.existing || {} };
-    // Aviso inmediato si la persona sigue en la app — no es la señal principal (esa es
-    // el badge persistente en Historial y el aviso al reabrir el registro), es solo un plus.
-    toast('⚠ Conflicto: ' + (resultado.message || 'esta OT ya fue registrada como Ejecutada.'));
+    // Modal con cierre manual — no es la señal principal (esa sigue siendo el badge
+    // persistente en Historial y el aviso al reabrir el registro), pero si el
+    // técnico sigue con la app abierta, esto sí exige que lo vea y lo cierre.
+    mostrarModalConflicto(rec);
   }
   await storage.set('registro:' + rec.id, rec);
   await setSyncStatusEnIndice(rec.id, status);
@@ -5869,15 +5882,11 @@ async function openRemoteDetail(id){
 }
 document.getElementById('btnCloseRemoteModal').addEventListener('click', () => document.getElementById('remoteModal').classList.remove('show'));
 document.getElementById('remoteModal').addEventListener('click', (e) => { if(e.target.id === 'remoteModal') e.currentTarget.classList.remove('show'); });
-// Aviso persistente de conflicto de sincronización — usa solo los campos que
-// realmente vinieron del backend en rec.conflictInfo, nunca inventa datos faltantes.
-function mostrarAvisoConflicto(rec){
-  const wrap = document.getElementById('conflictWarningWrap');
-  if(rec.syncStatus !== 'conflict' || !rec.conflictInfo){
-    wrap.style.display = 'none';
-    return;
-  }
-  const info = rec.conflictInfo;
+// Arma el texto del aviso de conflicto — usa solo los campos que realmente
+// vinieron del backend en rec.conflictInfo, nunca inventa datos faltantes.
+// Compartido entre la caja persistente del formulario y el modal.
+function construirMensajeConflicto(rec){
+  const info = rec.conflictInfo || {};
   const existing = info.existing || {};
   const lineas = ['⚠ CONFLICTO DE SINCRONIZACIÓN', '', info.message || ('La OT ' + (rec.ot||'') + ' ya fue registrada como Ejecutada.')];
   const detalle = [];
@@ -5888,9 +5897,27 @@ function mostrarAvisoConflicto(rec){
     lineas.push('', 'Registro existente:', ...detalle);
   }
   lineas.push('', 'Este informe permanece guardado localmente y requiere revisión.');
-  document.getElementById('conflictWarningText').textContent = lineas.join('\n');
+  return lineas.join('\n');
+}
+function mostrarAvisoConflicto(rec){
+  const wrap = document.getElementById('conflictWarningWrap');
+  if(rec.syncStatus !== 'conflict' || !rec.conflictInfo){
+    wrap.style.display = 'none';
+    return;
+  }
+  document.getElementById('conflictWarningText').textContent = construirMensajeConflicto(rec);
   wrap.style.display = '';
 }
+// Modal que exige cierre manual — un toast de ~2s no basta para algo que el
+// técnico tiene que ver sí o sí, aunque haya seguido usando la app mientras
+// la sincronización corría en segundo plano.
+function mostrarModalConflicto(rec){
+  document.getElementById('conflictModalBody').textContent = construirMensajeConflicto(rec);
+  document.getElementById('conflictModal').classList.add('show');
+}
+document.getElementById('btnCloseConflictModal').addEventListener('click', () => document.getElementById('conflictModal').classList.remove('show'));
+document.getElementById('btnEntendidoConflicto').addEventListener('click', () => document.getElementById('conflictModal').classList.remove('show'));
+document.getElementById('conflictModal').addEventListener('click', (e) => { if(e.target.id === 'conflictModal') e.currentTarget.classList.remove('show'); });
 async function loadRecordIntoForm(id){
   const rec = await storage.get('registro:' + id);
   if(!rec){ toast('No se encontró el registro'); return; }
@@ -6902,7 +6929,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v17'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v18'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
