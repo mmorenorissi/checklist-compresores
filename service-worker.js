@@ -1,5 +1,5 @@
 const CACHE_PREFIX = 'mantenimiento-compresores-ant-';
-const CACHE = CACHE_PREFIX + 'v19';
+const CACHE = CACHE_PREFIX + 'v20';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {

@@ -3117,6 +3117,13 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
         </p>
       </div>
     </div>
+    <div class="card">
+      <div class="card-head"><h2>Plan semanal (Etapa C)</h2></div>
+      <div class="card-pad">
+        <div id="planSemanalBadge" style="padding:9px 11px;border-radius:8px;font-size:12.5px;font-weight:700;margin-bottom:11px;background:var(--pend-bg);color:var(--muted);">Plan semanal: no disponible</div>
+        <button class="btn btn-secondary" id="btnActualizarPlan" style="width:100%;">🔄 Actualizar plan</button>
+      </div>
+    </div>
   </section>
 
   <!-- Overlay del escáner QR: fuera de las secciones .view a propósito.
@@ -5521,6 +5528,117 @@ async function getSyncConfig(){
 async function setSyncConfig(cfg){
   await storage.set('sync_config', cfg);
 }
+
+/* ============================================================
+   PLAN SEMANAL (Fase 4, Etapa C) — descarga y caché local, nada más.
+   No modifica el formulario ni agrega selector todavía (Etapa D).
+   Local-first: la App abre y sigue funcionando con el último plan
+   guardado aunque no haya red o el backend esté lento/caído.
+   ============================================================ */
+let planSemanalActivo = null;
+
+async function loadPlanSemanalLocal(){
+  planSemanalActivo = (await storage.get('plan_semanal_activo')) || null;
+  renderPlanSemanalBadge();
+  return planSemanalActivo;
+}
+
+async function fetchEstadoPlanActivo(){
+  const cfg = await getSyncConfig();
+  if(!cfg || !cfg.url || !cfg.appKey) return { ok:false, reason:'no_config' };
+  if(!navigator.onLine) return { ok:false, reason:'offline' };
+  const url = cfg.url + '?action=obtenerEstadoPlanActivo&key=' + encodeURIComponent(cfg.appKey) + '&app=COMPRESORES&_=' + Date.now();
+  try{
+    const resp = await fetch(url, { cache:'no-store' });
+    const data = await resp.json();
+    if(!data || !data.ok) return { ok:false, reason:(data && data.error) || 'error_servidor' };
+    return { ok:true, data };
+  }catch(e){
+    return { ok:false, reason:'network' };
+  }
+}
+
+async function fetchPlanActivo(){
+  const cfg = await getSyncConfig();
+  if(!cfg || !cfg.url || !cfg.appKey) return { ok:false, reason:'no_config' };
+  if(!navigator.onLine) return { ok:false, reason:'offline' };
+  const url = cfg.url + '?action=obtenerPlanActivo&key=' + encodeURIComponent(cfg.appKey) + '&app=COMPRESORES&_=' + Date.now();
+  try{
+    const resp = await fetch(url, { cache:'no-store' });
+    const data = await resp.json();
+    if(!data || !data.ok) return { ok:false, reason:(data && data.error) || 'error_servidor' };
+    return { ok:true, data };
+  }catch(e){
+    return { ok:false, reason:'network' };
+  }
+}
+
+// Único punto de entrada — decide si hace falta bajar el plan completo o basta
+// con lo que ya hay en caché. Nunca borra un plan local válido por una
+// consulta remota fallida o vacía (§7/§17 del documento de integración).
+async function actualizarPlanSemanal({ forzar = false } = {}){
+  if(!planSemanalActivo) await loadPlanSemanalLocal();
+
+  const estadoResp = await fetchEstadoPlanActivo();
+  if(!estadoResp.ok) return estadoResp; // no_config / offline / network / error_servidor — se conserva la caché tal cual
+
+  const remoto = estadoResp.data;
+  if(!remoto.planId){
+    return { ok:false, reason:'no_active_plan' };
+  }
+
+  const planIdLocal = planSemanalActivo ? planSemanalActivo.planId : null;
+  if(!forzar && remoto.planId === planIdLocal){
+    return { ok:true, changed:false, data: planSemanalActivo };
+  }
+
+  const completoResp = await fetchPlanActivo();
+  if(!completoResp.ok) return completoResp;
+
+  const data = completoResp.data;
+  // Validación antes de persistir — no reconstruye ni inventa campos (§8).
+  if(!data || data.ok !== true || data.app !== 'COMPRESORES' || !data.planId || !Array.isArray(data.items)){
+    return { ok:false, reason:'invalid_plan' };
+  }
+
+  await storage.set('plan_semanal_activo', data);
+  await storage.set('plan_semanal_id', data.planId);
+  await storage.set('plan_semanal_updated_at', new Date().toISOString());
+  planSemanalActivo = data;
+  renderPlanSemanalBadge();
+  return { ok:true, changed:true, data };
+}
+
+function renderPlanSemanalBadge(){
+  const badge = document.getElementById('planSemanalBadge');
+  if(!badge) return;
+  if(!planSemanalActivo || !planSemanalActivo.planId){
+    badge.textContent = 'Plan semanal: no disponible';
+    return;
+  }
+  badge.textContent = `Plan semanal: ${planSemanalActivo.semana || '—'} · ${planSemanalActivo.items.length} OT`;
+}
+
+document.getElementById('btnActualizarPlan').addEventListener('click', async () => {
+  const btn = document.getElementById('btnActualizarPlan');
+  btn.disabled = true;
+  try{
+    const r = await actualizarPlanSemanal({ forzar:true });
+    if(r.ok){
+      toast(`✓ Plan ${r.data.semana || ''} actualizado · ${r.data.items.length} OT`);
+    } else if(r.reason === 'offline' || r.reason === 'network'){
+      toast('Sin conexión · usando último plan guardado');
+    } else if(r.reason === 'no_active_plan'){
+      toast('No hay plan activo en backend');
+    } else if(r.reason === 'no_config'){
+      toast('Configura la sincronización primero.');
+    } else {
+      toast('No se pudo actualizar el plan (' + (r.reason || 'error') + ')');
+    }
+  } finally {
+    btn.disabled = false;
+  }
+});
 function buildSyncPayload(rec){
   const liviano = JSON.parse(JSON.stringify(rec));
   const fotosResumen = {};
@@ -6931,13 +7049,15 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v19'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v20'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
   await loadEquipos();
   await loadPersonal();
+  await loadPlanSemanalLocal();
   renderHome();
+  actualizarPlanSemanal().catch(()=>{}); // en segundo plano, no bloquea la apertura (local-first)
   if('serviceWorker' in navigator && location.protocol.startsWith('http')){
     // se agrega la versión a la URL del propio archivo -> cada versión nueva es una
     // dirección distinta, así el navegador no puede quedarse con una copia vieja cacheada
