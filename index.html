@@ -103,7 +103,7 @@
   .add-photo{width:58px;height:58px;border-radius:7px;border:1.5px dashed var(--steel);color:var(--steel);display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:9.5px;font-weight:600;cursor:pointer;background:#F5F8FB;gap:2px;}
   .add-photo svg{width:16px;height:16px;}
 
-  .summary-strip{position:sticky;top:calc(96px + env(safe-area-inset-top));z-index:10;display:flex;gap:6px;padding:8px 12px;background:var(--paper);border-bottom:1px solid var(--line);margin-bottom:6px;overflow-x:auto;}
+  .summary-strip{display:flex;gap:6px;padding:8px 12px;background:var(--paper);border-bottom:1px solid var(--line);margin-bottom:6px;overflow-x:auto;}
   .pill{flex:1;min-width:60px;text-align:center;padding:6px 3px;border-radius:8px;font-size:11px;font-weight:700;font-family:var(--font-display);letter-spacing:.01em;}
   .pill.bueno{background:var(--bueno-bg);color:var(--bueno);}
   .pill.regular{background:var(--regular-bg);color:var(--regular);}
@@ -2952,13 +2952,15 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
       </div>
     </div>
 
-    <div id="estadoEquipoBadge" style="display:none;margin:0 0 8px;padding:10px 12px;border-radius:9px;font-weight:700;font-family:var(--font-display);font-size:13px;text-align:center;letter-spacing:.02em;"></div>
-    <div class="summary-strip" id="summaryStrip">
-      <div class="pill bueno"><b id="sumBueno">0</b>Bueno</div>
-      <div class="pill regular"><b id="sumRegular">0</b>Regular</div>
-      <div class="pill malo"><b id="sumMalo">0</b>Malo</div>
-      <div class="pill na"><b id="sumNA">0</b>N/A</div>
-      <div class="pill pend"><b id="sumPend">0</b>Pend.</div>
+    <div id="stickyEstadoWrap" style="position:sticky;top:calc(96px + env(safe-area-inset-top));z-index:10;background:var(--paper);">
+      <div id="estadoEquipoBadge" style="display:none;margin:0 0 8px;padding:10px 12px;border-radius:9px;font-weight:700;font-family:var(--font-display);font-size:13px;text-align:center;letter-spacing:.02em;"></div>
+      <div class="summary-strip" id="summaryStrip">
+        <div class="pill bueno"><b id="sumBueno">0</b>Bueno</div>
+        <div class="pill regular"><b id="sumRegular">0</b>Regular</div>
+        <div class="pill malo"><b id="sumMalo">0</b>Malo</div>
+        <div class="pill na"><b id="sumNA">0</b>N/A</div>
+        <div class="pill pend"><b id="sumPend">0</b>Pend.</div>
+      </div>
     </div>
 
     <div id="referenciaMttoCard" style="display:none;"></div>
@@ -6929,7 +6931,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v18'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v19'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
