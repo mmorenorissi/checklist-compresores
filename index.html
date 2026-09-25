@@ -2844,6 +2844,11 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
 
     <div class="card">
       <div class="card-head"><h2 id="formTitle">Servicio</h2><div class="sub" id="recIdLabel">registro nuevo</div></div>
+      <div class="card-pad" id="conflictWarningWrap" style="display:none;padding-top:0;">
+        <div style="background:var(--malo-bg);color:var(--malo);border-radius:8px;padding:11px 12px;font-size:12.5px;line-height:1.5;">
+          <div id="conflictWarningText" style="white-space:pre-line;"></div>
+        </div>
+      </div>
       <div class="card-pad">
         <button id="btnEscanearQR" type="button" style="width:100%;padding:12px;border-radius:10px;border:1.5px dashed var(--steel);background:var(--paper);color:var(--steel);font-weight:700;font-size:13px;margin-bottom:14px;">📷 Escanear QR del equipo</button>
         <div class="field">
@@ -4751,6 +4756,7 @@ async function resumeDraft(draft){
   document.getElementById('recIdLabel').textContent = 'borrador recuperado';
   document.getElementById('btnDelete').style.display = 'none';
   document.getElementById('f_intervaloWrap').style.display = draft.servicio === 'mtto' ? 'block' : 'none';
+  document.getElementById('conflictWarningWrap').style.display = 'none';
 
   populateFormAreaSelect(draft.area);
   populateFormEquipoSelect();
@@ -4873,6 +4879,7 @@ function startNewForm(servicio){
 
   document.getElementById('formTitle').textContent = servicioLabelCorto(servicio);
   document.getElementById('recIdLabel').textContent = 'registro nuevo';
+  document.getElementById('conflictWarningWrap').style.display = 'none';
   document.getElementById('btnDelete').style.display = 'none';
   document.getElementById('f_intervaloWrap').style.display = servicio === 'mtto' ? 'block' : 'none';
 
@@ -5524,15 +5531,25 @@ async function syncRegistroRemoto(rec){
     body.set('payload', JSON.stringify(buildSyncPayload(rec)));
     const resp = await fetch(cfg.url, { method:'POST', body });
     const data = await resp.json();
-    return data && data.ok ? { ok:true } : { ok:false, reason: (data && data.error) || 'error_servidor' };
+    if(data && data.ok) return { ok:true };
+    if(data && data.code === 'OT_ALREADY_EXECUTED'){
+      return { ok:false, reason:'ot_already_executed', code:data.code, message:data.message, existing:data.existing || {} };
+    }
+    return { ok:false, reason: (data && data.error) || 'error_servidor' };
   }catch(e){
     return { ok:false, reason:'network' };
   }
 }
 async function intentarSincronizar(rec){
   const resultado = await syncRegistroRemoto(rec);
-  const status = resultado.ok ? 'sincronizado' : (resultado.reason === 'no_config' ? 'local' : 'pendiente');
+  const status = resultado.ok ? 'sincronizado' : (resultado.code === 'OT_ALREADY_EXECUTED' ? 'conflict' : (resultado.reason === 'no_config' ? 'local' : 'pendiente'));
   rec.syncStatus = status;
+  if(status === 'conflict'){
+    rec.conflictInfo = { message: resultado.message, existing: resultado.existing || {} };
+    // Aviso inmediato si la persona sigue en la app — no es la señal principal (esa es
+    // el badge persistente en Historial y el aviso al reabrir el registro), es solo un plus.
+    toast('⚠ Conflicto: ' + (resultado.message || 'esta OT ya fue registrada como Ejecutada.'));
+  }
   await storage.set('registro:' + rec.id, rec);
   await setSyncStatusEnIndice(rec.id, status);
   if(resultado.ok) subirPdfRemoto(rec); // solo tiene sentido si la fila ya existe en la planilla
@@ -5622,7 +5639,9 @@ async function sincronizarPendientes(){
   if(!cfg || !cfg.url || !cfg.appKey){ toast('Configura la sincronización primero.'); return; }
   if(!navigator.onLine){ toast('Sin conexión — intenta cuando tengas internet.'); return; }
   const idx = (await storage.get('registros_index')) || [];
-  const pendientes = idx.filter(x => x.syncStatus !== 'sincronizado' || !x.pdfUrl);
+  // Un registro en conflicto no vuelve a intentar solo — quedó a la espera de
+  // revisión manual/supervisor, no de un reintento automático (§9).
+  const pendientes = idx.filter(x => x.syncStatus !== 'conflict' && (x.syncStatus !== 'sincronizado' || !x.pdfUrl));
   if(!pendientes.length){ toast('No hay registros pendientes.'); return; }
   toast(`Sincronizando ${pendientes.length} registro(s)…`);
   let ok = 0, fail = 0;
@@ -5850,6 +5869,28 @@ async function openRemoteDetail(id){
 }
 document.getElementById('btnCloseRemoteModal').addEventListener('click', () => document.getElementById('remoteModal').classList.remove('show'));
 document.getElementById('remoteModal').addEventListener('click', (e) => { if(e.target.id === 'remoteModal') e.currentTarget.classList.remove('show'); });
+// Aviso persistente de conflicto de sincronización — usa solo los campos que
+// realmente vinieron del backend en rec.conflictInfo, nunca inventa datos faltantes.
+function mostrarAvisoConflicto(rec){
+  const wrap = document.getElementById('conflictWarningWrap');
+  if(rec.syncStatus !== 'conflict' || !rec.conflictInfo){
+    wrap.style.display = 'none';
+    return;
+  }
+  const info = rec.conflictInfo;
+  const existing = info.existing || {};
+  const lineas = ['⚠ CONFLICTO DE SINCRONIZACIÓN', '', info.message || ('La OT ' + (rec.ot||'') + ' ya fue registrada como Ejecutada.')];
+  const detalle = [];
+  if(existing.fecha) detalle.push('Fecha: ' + existing.fecha);
+  if(existing.tecnico) detalle.push('Técnico: ' + existing.tecnico);
+  if(existing.completadoPor) detalle.push('Completado por: ' + existing.completadoPor);
+  if(detalle.length){
+    lineas.push('', 'Registro existente:', ...detalle);
+  }
+  lineas.push('', 'Este informe permanece guardado localmente y requiere revisión.');
+  document.getElementById('conflictWarningText').textContent = lineas.join('\n');
+  wrap.style.display = '';
+}
 async function loadRecordIntoForm(id){
   const rec = await storage.get('registro:' + id);
   if(!rec){ toast('No se encontró el registro'); return; }
@@ -5864,6 +5905,7 @@ async function loadRecordIntoForm(id){
   document.getElementById('recIdLabel').textContent = 'guardado · ' + rec.id;
   document.getElementById('btnDelete').style.display = 'block';
   document.getElementById('f_intervaloWrap').style.display = rec.servicio === 'mtto' ? 'block' : 'none';
+  mostrarAvisoConflicto(rec);
 
   populateFormAreaSelect(rec.area);
   populateFormEquipoSelect();
@@ -5921,18 +5963,20 @@ document.querySelectorAll('.filter-chip').forEach(chip => {
   chip.addEventListener('click', () => { histFilter = chip.dataset.f; document.querySelectorAll('.filter-chip').forEach(c=>c.classList.toggle('active', c===chip)); loadHistory(); });
 });
 function historyRowHTML(item){
+  const esConflicto = item.syncStatus === 'conflict';
   const esReprogramada = item.estadoOt === 'reprogramada';
   const inconsistentePM03 = esReprogramada && item.claseOrden === 'PM03';
   const codigoServicio = item.servicio === 'inspeccion' ? 'IN' : item.servicio === 'correctivo' ? 'CO' : 'MT';
-  const badgeText = esReprogramada ? (inconsistentePM03 ? '⚠' : 'RP') : ((item.equipoLabel||'').replace(/[^0-9]/g,'').slice(-2) || codigoServicio);
+  const badgeText = esConflicto ? '⚠' : esReprogramada ? (inconsistentePM03 ? '⚠' : 'RP') : ((item.equipoLabel||'').replace(/[^0-9]/g,'').slice(-2) || codigoServicio);
   let cls = 'bueno', chipText = 'Operativo';
-  if(inconsistentePM03){ cls = 'malo'; chipText = '⚠ PM03/Reprogramada'; }
+  if(esConflicto){ cls = 'malo'; chipText = '⚠ Conflicto'; }
+  else if(inconsistentePM03){ cls = 'malo'; chipText = '⚠ PM03/Reprogramada'; }
   else if(esReprogramada){ cls = 'regular'; chipText = 'Reprogramada'; }
   else if(item.criticoAlta > 0){ cls = 'malo'; chipText = 'Crítico'; }
   else if(item.malo > 0){ cls = 'regular'; chipText = item.malo + ' con obs.'; }
   else if(item.regular > 0){ cls = 'regular'; chipText = 'Con observaciones'; }
   const servicioLabel = servicioLabelCorto(item.servicio);
-  const syncIcon = item.syncStatus === 'sincronizado' ? '☁️' : item.syncStatus === 'pendiente' ? '⏳' : '';
+  const syncIcon = esConflicto ? '⚠️' : item.syncStatus === 'sincronizado' ? '☁️' : item.syncStatus === 'pendiente' ? '⏳' : '';
   const pdfIcon = item.pdfUrl ? `<a href="${esc(item.pdfUrl)}" target="_blank" onclick="event.stopPropagation()" title="Abrir PDF en Drive">📄</a>` : '';
   return `<div class="hist-item" data-open="${item.id}">
     <div class="hist-badge ${cls==='malo'?'malo':cls==='regular'?'regular':'bueno'}" style="${cls==='regular'?'background:var(--regular);':''}">${esc(badgeText)}</div>
@@ -6858,7 +6902,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v16'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v17'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
