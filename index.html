@@ -2936,7 +2936,7 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
     </div>
 
     <div id="bloqueTecnico">
-    <div class="card">
+    <div class="card" id="cardDatosEquipo">
       <div class="card-head"><h2>Datos del equipo</h2></div>
       <div class="card-pad">
         <div class="row2">
@@ -2994,6 +2994,26 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
         </div>
         <label style="font-size:12.5px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px;">Fotos de evidencia</label>
         <div id="correctivoPhotos" class="photo-row"></div>
+      </div>
+    </div>
+
+    <div class="card" id="cardActividad" style="display:none;">
+      <div class="card-head"><h2>Datos de la actividad</h2></div>
+      <div class="card-pad">
+        <div class="field" style="margin-bottom:10px;">
+          <label>Estado inicial / condición encontrada</label>
+          <textarea id="f_actividadEstadoInicial" rows="3" placeholder="¿Cómo se encontró la sala/actividad?" style="width:100%;border:1.5px solid var(--line);border-radius:8px;padding:9px 11px;font-family:var(--font-body);font-size:14px;"></textarea>
+        </div>
+        <div class="field" style="margin-bottom:10px;">
+          <label>Trabajo realizado / detalle de la actividad</label>
+          <textarea id="f_actividadTrabajo" rows="3" placeholder="¿Qué se hizo?" style="width:100%;border:1.5px solid var(--line);border-radius:8px;padding:9px 11px;font-family:var(--font-body);font-size:14px;"></textarea>
+        </div>
+        <div class="field" style="margin-bottom:10px;">
+          <label>Observaciones / condición final (opcional)</label>
+          <textarea id="f_actividadObservaciones" rows="2" placeholder="¿Algo más para dejar registrado?" style="width:100%;border:1.5px solid var(--line);border-radius:8px;padding:9px 11px;font-family:var(--font-body);font-size:14px;"></textarea>
+        </div>
+        <label style="font-size:12.5px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px;">Fotografías (mínimo 1)</label>
+        <div id="actividadPhotos" class="photo-row"></div>
       </div>
     </div>
 
@@ -4044,6 +4064,7 @@ const CORRECTIVO_CIERRE_ITEMS = [
 function itemsForServicio(servicio){
   if(servicio === 'inspeccion') return buildInspeccionPauta();
   if(servicio === 'correctivo') return buildCorrectivoPauta();
+  if(servicio === 'actividad') return buildActividadPauta();
   return buildMttoPauta();
 }
 // Mantenimiento Correctivo (§79 del estándar) — solo reutiliza el checklist de
@@ -4054,8 +4075,18 @@ function buildCorrectivoPauta(){
     { key:'seguridad', title:'SEGURIDAD Y BLOQUEO', items: MTTO_SEGURIDAD }
   ];
 }
+// tipoServicio=actividad (v32.1) — trabajo programado sin pauta técnica de
+// equipo (ej. limpieza de sala): mismo patrón que Correctivo, solo Seguridad y
+// Bloqueo aquí; el contenido real vive en "Datos de la actividad" (texto libre
+// + fotos). Bloqueo/Segregación se marcan N/A si no aplican — no se inventa
+// una lógica paralela de "aplica/no aplica".
+function buildActividadPauta(){
+  return [
+    { key:'seguridad', title:'SEGURIDAD Y BLOQUEO', items: MTTO_SEGURIDAD }
+  ];
+}
 function servicioLabelCorto(servicio){
-  return servicio === 'inspeccion' ? 'Inspección' : servicio === 'correctivo' ? 'Correctivo' : 'Mantenimiento';
+  return servicio === 'inspeccion' ? 'Inspección' : servicio === 'correctivo' ? 'Correctivo' : servicio === 'actividad' ? 'Actividad' : 'Mantenimiento';
 }
 
 /* ============================================================
@@ -4426,9 +4457,11 @@ function applyEquipoToForm(equipo){
 // que motor diésel/eléctrico y componentes dependen de la categoría).
 function rebuildMttoPautaIfNeeded(){
   const fotosCorrectivo = photoState['correctivo']; // no forman parte de itemsForServicio(); se pierden si no se preservan a mano
+  const fotosActividad = photoState['actividad']; // ídem — actividad tampoco las trae desde itemsForServicio()
   itemState = blankItemState(currentServicio);
   photoState = blankPhotoState(currentServicio);
   if(fotosCorrectivo) photoState['correctivo'] = fotosCorrectivo;
+  if(fotosActividad) photoState['actividad'] = fotosActividad;
   renderSections();
   updateSummary();
 }
@@ -4806,6 +4839,9 @@ async function resumeDraft(draft){
   document.getElementById('f_correctivoProblema').value = draft.correctivoProblema || '';
   document.getElementById('f_correctivoTrabajo').value = draft.correctivoTrabajo || '';
   document.getElementById('f_correctivoDesviaciones').value = draft.correctivoDesviaciones || '';
+  document.getElementById('f_actividadEstadoInicial').value = draft.actividadEstadoInicial || '';
+  document.getElementById('f_actividadTrabajo').value = draft.actividadTrabajo || '';
+  document.getElementById('f_actividadObservaciones').value = draft.actividadObservaciones || '';
   document.getElementById('f_origenTrabajo').value = draft.origenTrabajo || '';
   document.getElementById('f_claseOrden').value = draft.claseOrden || '';
   document.getElementById('f_estadoOt').value = draft.estadoOt || '';
@@ -4826,7 +4862,7 @@ async function resumeDraft(draft){
     document.getElementById('f_ot').readOnly = true;
     document.getElementById('f_origenTrabajo').disabled = true;
     document.getElementById('f_claseOrden').disabled = true;
-    document.getElementById('f_area').disabled = draft.planSnapshot.estadoMapeo === 'SEGURO';
+    document.getElementById('f_area').disabled = draft.planSnapshot.estadoMapeo === 'SEGURO' || (draft.planSnapshot.estadoMapeo === 'SIN_EQUIPO' && !!draft.planSnapshot.areaNombre);
     document.getElementById('f_equipo').disabled = draft.planSnapshot.estadoMapeo === 'SEGURO' || draft.planSnapshot.estadoMapeo === 'SIN_EQUIPO';
     document.getElementById('f_otPlan').value = draft.planSnapshot.ot || '';
     otPlanPrevValue = draft.planSnapshot.ot || '';
@@ -4967,6 +5003,9 @@ function startNewForm(servicio){
   document.getElementById('f_correctivoProblema').value = '';
   document.getElementById('f_correctivoTrabajo').value = '';
   document.getElementById('f_correctivoDesviaciones').value = '';
+  document.getElementById('f_actividadEstadoInicial').value = '';
+  document.getElementById('f_actividadTrabajo').value = '';
+  document.getElementById('f_actividadObservaciones').value = '';
   document.getElementById('f_origenTrabajo').value = '';
   document.getElementById('f_claseOrden').value = '';
   document.getElementById('f_estadoOt').value = '';
@@ -5121,6 +5160,9 @@ document.getElementById('photoModal').addEventListener('click', () => document.g
 function renderCorrectivoPhotos(){
   renderPhotos(document.getElementById('correctivoPhotos'), 'correctivo', renderCorrectivoPhotos);
 }
+function renderActividadPhotos(){
+  renderPhotos(document.getElementById('actividadPhotos'), 'actividad', renderActividadPhotos);
+}
 
 function computeEquipoEstado(items){
   // Seguridad y Bloqueo (LOTO, libro de bloqueo, segregación, registro/foto) es una
@@ -5222,16 +5264,21 @@ document.getElementById('addRepuestoRec').addEventListener('click', () => { repu
 function renderEntregaChecklist(){
   const esInspeccion = currentServicio === 'inspeccion';
   const esCorrectivo = currentServicio === 'correctivo';
+  const esActividad = currentServicio === 'actividad';
   // §15 — Correctivo sí usa Repuestos y materiales utilizados (a diferencia de Inspección).
-  document.getElementById('cardRepuestosUsados').style.display = esInspeccion ? 'none' : '';
-  document.getElementById('cardObservaciones').style.display = esInspeccion ? 'none' : '';
-  document.getElementById('cardRepuestosRec').style.display = (esInspeccion || esCorrectivo) ? 'none' : ''; // recomendados: sigue oculto en Correctivo, §16
+  // Actividad (§6 v32.1) no usa ninguno de estos — es un formulario libre, sin pauta técnica.
+  document.getElementById('cardRepuestosUsados').style.display = (esInspeccion || esActividad) ? 'none' : '';
+  document.getElementById('cardObservaciones').style.display = (esInspeccion || esActividad) ? 'none' : '';
+  document.getElementById('cardRepuestosRec').style.display = (esInspeccion || esCorrectivo || esActividad) ? 'none' : ''; // recomendados: sigue oculto en Correctivo, §16
   document.getElementById('cardCorrectivo').style.display = esCorrectivo ? '' : 'none';
   if(esCorrectivo) renderCorrectivoPhotos();
+  document.getElementById('cardActividad').style.display = esActividad ? '' : 'none';
+  if(esActividad) renderActividadPhotos();
+  document.getElementById('cardDatosEquipo').style.display = esActividad ? 'none' : '';
   // en Inspección, "Estado inicial" y "Hallazgo/anomalía" ahora viven en el checklist principal
   // (sectionsWrap), con foto/observación — este casillero clásico queda solo para Mantención y Correctivo.
-  document.getElementById('entregaItems').style.display = esInspeccion ? 'none' : '';
-  if(esInspeccion) return;
+  document.getElementById('entregaItems').style.display = (esInspeccion || esActividad) ? 'none' : '';
+  if(esInspeccion || esActividad) return;
 
   // §17 — Correctivo usa su propia pauta de cierre, no ENTREGA_ITEMS (que trae ítems
   // de mantención preventiva como "cambio de aceite" que no aplican a cualquier falla).
@@ -5317,7 +5364,10 @@ function buildRecord(){
     hallazgos: document.getElementById('f_hallazgos').value,
     correctivoProblema: document.getElementById('f_correctivoProblema').value,
     correctivoTrabajo: document.getElementById('f_correctivoTrabajo').value,
-    correctivoDesviaciones: document.getElementById('f_correctivoDesviaciones').value
+    correctivoDesviaciones: document.getElementById('f_correctivoDesviaciones').value,
+    actividadEstadoInicial: document.getElementById('f_actividadEstadoInicial').value,
+    actividadTrabajo: document.getElementById('f_actividadTrabajo').value,
+    actividadObservaciones: document.getElementById('f_actividadObservaciones').value
   };
 }
 function summarizeItems(items){
@@ -5446,6 +5496,20 @@ async function saveRecord(){
       }
       if(!document.getElementById('f_correctivoTrabajo').value.trim()){
         toast('✕ Falta describir el trabajo realizado.');
+        return false;
+      }
+    }
+    if(currentServicio === 'actividad'){
+      if(!document.getElementById('f_actividadEstadoInicial').value.trim()){
+        toast('✕ Falta describir el estado inicial / condición encontrada.');
+        return false;
+      }
+      if(!document.getElementById('f_actividadTrabajo').value.trim()){
+        toast('✕ Falta describir el trabajo realizado.');
+        return false;
+      }
+      if(!(photoState['actividad'] && photoState['actividad'].length)){
+        toast('✕ Falta al menos 1 fotografía de la actividad.');
         return false;
       }
     }
@@ -5668,7 +5732,7 @@ function poblarSelectorOtPlan(){
       const bloqueada = it.estado === 'ejecutada' || it.estadoMapeo === 'CONFLICTO';
       const prefijo = it.estadoMapeo === 'CONFLICTO' ? '⛔ CONFLICTO — ' : '';
       const fechaFmt = formatFechaProgramaCorta(it.fechaPrograma);
-      const tipoLabel = it.tipoServicio === 'inspeccion' ? 'INSPECCIÓN' : it.tipoServicio === 'mtto' ? 'MANTENIMIENTO' : '—';
+      const tipoLabel = it.tipoServicio === 'inspeccion' ? 'INSPECCIÓN' : it.tipoServicio === 'mtto' ? 'MANTENIMIENTO' : it.tipoServicio === 'actividad' ? 'ACTIVIDAD' : '—';
       const estadoTexto = it.estadoMapeo === 'SIN_EQUIPO' ? 'SIN EQUIPO' : (estadoLabel[it.estado] || it.estado || '');
       return `<option value="${esc(it.ot)}" ${bloqueada ? 'disabled' : ''}>${prefijo}${esc(it.ot)} — ${esc(fechaFmt)} — ${tipoLabel} — ${esc(it.descripcion || it.equipoNombre || '—')} · ${esc(estadoTexto)}</option>`;
     }).join('');
@@ -5712,7 +5776,7 @@ function startProgramado(){
 }
 
 function aplicarServicioDesdeOt(tipoServicio){
-  if(tipoServicio !== 'mtto' && tipoServicio !== 'inspeccion'){
+  if(tipoServicio !== 'mtto' && tipoServicio !== 'inspeccion' && tipoServicio !== 'actividad'){
     toast('⚠ Esta OT no trae un tipo de servicio válido — revisa el plan publicado en el Centro.');
     return false;
   }
@@ -5720,7 +5784,7 @@ function aplicarServicioDesdeOt(tipoServicio){
   currentServicio = tipoServicio;
   document.getElementById('formTitle').textContent = servicioLabelCorto(tipoServicio);
   document.getElementById('f_intervaloWrap').style.display = tipoServicio === 'mtto' ? 'block' : 'none';
-  document.getElementById('f_tiposervicio').value = tipoServicio === 'inspeccion' ? 'INSPECCIÓN GENERAL' : 'MANTENIMIENTO';
+  document.getElementById('f_tiposervicio').value = tipoServicio === 'inspeccion' ? 'INSPECCIÓN GENERAL' : tipoServicio === 'actividad' ? 'ACTIVIDAD PROGRAMADA' : 'MANTENIMIENTO';
   itemState = blankItemState(tipoServicio);
   photoState = blankPhotoState(tipoServicio);
   renderSections();
@@ -5795,8 +5859,16 @@ async function aplicarSeleccionPlan(item){
     document.getElementById('f_equipo').dispatchEvent(new Event('change'));
     document.getElementById('f_equipo').disabled = true;
   } else if(item.estadoMapeo === 'SIN_EQUIPO'){
-    document.getElementById('f_area').disabled = false;
-    document.getElementById('f_area').value = '';
+    populateFormAreaSelect();
+    const areaSel = document.getElementById('f_area');
+    if(item.areaNombre && AREAS.includes(item.areaNombre)){
+      areaSel.value = item.areaNombre;
+      areaSel.disabled = true;
+      await asegurarFolioPorArea(item.areaNombre);
+    } else {
+      areaSel.value = '';
+      areaSel.disabled = false;
+    }
     populateFormEquipoSelect();
     document.getElementById('f_equipo').disabled = true;
     toast('Actividad sin equipo individual — no requiere seleccionar un compresor.');
@@ -5968,6 +6040,99 @@ async function generarInformeReprogramacionPDF(rec){
 
   return doc;
 }
+async function generarInformeActividadPDF(rec){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'mm', format:'a4' });
+  const pageW = doc.internal.pageSize.getWidth();
+  const marginX = 14;
+  let y = 15;
+
+  doc.setFont('helvetica','bold'); doc.setFontSize(14);
+  doc.text('TRABAJO PROGRAMADO — ACTIVIDAD', marginX, y); y += 6;
+  doc.setFont('helvetica','normal'); doc.setFontSize(8);
+  doc.text('Mantenimiento y Reparación de Equipos de Aire Comprimido — Minera Antucoya', marginX, y); y += 8;
+
+  const snap = rec.planSnapshot || {};
+  doc.setFont('helvetica','bold'); doc.setFontSize(9);
+  doc.setFont('helvetica','normal');
+  [
+    `OT: ${rec.ot || '—'}`,
+    `Fecha: ${rec.fecha || '—'}`,
+    `Área: ${rec.area || snap.areaNombre || '—'}`,
+    `Descripción SAP: ${snap.descripcion || '—'}`,
+    `N° Informe: ${rec.ninforme || '—'}`,
+    `Técnico(s): ${rec.tecnico || '—'}`,
+    `Supervisor: ${rec.supervisor || '—'}`,
+    `Hora inicio: ${rec.horainicio || '—'}   Hora término: ${rec.horatermino || '—'}`
+  ].forEach(linea => { doc.text(linea, marginX, y); y += 5; });
+  y += 3;
+
+  function bloqueTexto(titulo, texto){
+    y = pdfEnsureSpace(doc, y, 12);
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.text(titulo, marginX, y); y += 5;
+    doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
+    const lineas = doc.splitTextToSize((texto || '—').trim() || '—', pageW - marginX*2);
+    y = pdfEnsureSpace(doc, y, lineas.length*4.2);
+    doc.text(lineas, marginX, y); y += lineas.length*4.2 + 4;
+  }
+  bloqueTexto('Estado inicial / condición encontrada', rec.actividadEstadoInicial);
+  bloqueTexto('Trabajo realizado', rec.actividadTrabajo);
+  bloqueTexto('Observaciones / condición final', rec.actividadObservaciones);
+
+  // Seguridad y Bloqueo — mismos ítems del checklist (bueno/regular/malo/na =
+  // aplica/no aplica), no se inventa una lógica paralela (§7).
+  const itemState = rec.items || {};
+  const RESULTADO_COLOR = { bueno:[46,125,50], regular:[230,150,10], malo:[190,40,40], na:[130,130,130] };
+  y = pdfSectionTitle(doc, y, marginX, 'Seguridad y Bloqueo');
+  for(const sec of itemsForServicio('actividad')){
+    for(let i=0; i<sec.items.length; i++){
+      const rawItem = sec.items[i];
+      const key = itemKey(sec.key, i);
+      const st = itemState[key];
+      if(!st || !st.status) continue;
+      const label = labelParaValor(itemTipo(rawItem), st.status);
+      const color = RESULTADO_COLOR[st.status] || [0,0,0];
+      y = pdfEnsureSpace(doc, y, 8);
+      doc.setFont('helvetica','normal'); doc.setFontSize(8.5);
+      const anchoTexto = pageW - marginX*2 - 34;
+      const lineasTexto = doc.splitTextToSize(itemTexto(rawItem), anchoTexto);
+      doc.text(lineasTexto, marginX, y);
+      doc.setTextColor(color[0], color[1], color[2]);
+      doc.text(label, pageW - marginX, y, { align:'right' });
+      doc.setTextColor(0,0,0);
+      y += lineasTexto.length * 4;
+      if(st.obs){
+        doc.setFontSize(8); doc.setTextColor(100);
+        const lineasObs = doc.splitTextToSize(st.obs, anchoTexto);
+        y = pdfEnsureSpace(doc, y, lineasObs.length*3.8);
+        doc.text(lineasObs, marginX, y); y += lineasObs.length*3.8;
+        doc.setTextColor(0,0,0);
+      }
+      y += 2;
+    }
+  }
+
+  // Fotos de la actividad
+  const fotos = (rec.photos || {})['actividad'] || [];
+  if(fotos.length){
+    y = pdfEnsureSpace(doc, y, 10);
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.text('Fotografías', marginX, y); y += 5;
+    const imgW = 55, gap = 4;
+    let x = marginX, rowMaxH = 0;
+    for(const photoUrl of fotos){
+      const dims = await getImageDims(photoUrl);
+      const imgH = Math.min(imgW * (dims.height/dims.width), 60);
+      if(x + imgW > pageW - marginX){ x = marginX; y += rowMaxH + gap; rowMaxH = 0; }
+      y = pdfEnsureSpace(doc, y, imgH + gap);
+      try{ doc.addImage(photoUrl, 'JPEG', x, y, imgW, imgH); }catch(err){ /* imagen inválida, se omite sin romper el resto */ }
+      x += imgW + gap;
+      rowMaxH = Math.max(rowMaxH, imgH);
+    }
+    y += rowMaxH + 3;
+  }
+
+  return doc;
+}
 async function subirPdfRemoto(rec){
   const cfg = await getSyncConfig();
   if(!cfg || !cfg.url || !cfg.appKey) return { ok:false, reason:'no_config' };
@@ -5975,7 +6140,7 @@ async function subirPdfRemoto(rec){
   const ot = String(rec.ot || '').trim();
   if(!/^\d+$/.test(ot)) return { ok:false, reason:'ot_requerida' };
   try{
-    const doc = rec.estadoOt === 'reprogramada' ? await generarInformeReprogramacionPDF(rec) : await generarInformePDF(rec);
+    const doc = rec.estadoOt === 'reprogramada' ? await generarInformeReprogramacionPDF(rec) : (rec.servicio === 'actividad' ? await generarInformeActividadPDF(rec) : await generarInformePDF(rec));
     const base64 = doc.output('datauristring');
     const filename = formatFilenamePDF({
       ot,
@@ -6179,7 +6344,7 @@ async function remoteRowHTML(item){
   const estado = inconsistentePM03 ? '⚠ PM03/REPROGRAMADA' : esReprogramada ? 'REPROGRAMADA' : (item.estado || '').toUpperCase();
   const cls = inconsistentePM03 ? 'malo' : esReprogramada || estado.includes('NO OPERATIVO') || estado.includes('CRÍTICO') ? (esReprogramada ? 'regular' : 'malo') : estado.includes('OBSERVACION') ? 'regular' : 'bueno';
   const tipoTxt = (item.tipoServicio||'').toLowerCase();
-  const servicioLabel = tipoTxt.includes('correctiv') ? 'Correctivo' : tipoTxt.includes('inspecc') ? 'Inspección' : 'Mantenimiento';
+  const servicioLabel = tipoTxt.includes('correctiv') ? 'Correctivo' : tipoTxt.includes('inspecc') ? 'Inspección' : tipoTxt.includes('actividad') ? 'Actividad' : 'Mantenimiento';
   const pdfIcon = item.pdfUrl ? `<a href="${esc(item.pdfUrl)}" target="_blank" onclick="event.stopPropagation()" title="Abrir PDF en Drive">📄</a>` : '';
   return `<div class="hist-item" data-remote="${esc(item.id)}">
     <div class="hist-badge" style="background:var(--steel);">🌐</div>
@@ -6200,7 +6365,15 @@ async function openLocalDetailReadOnly(id){
   const rec = await storage.get('registro:' + id);
   if(!rec){ body.innerHTML = 'No se pudo cargar el registro.'; return; }
   const estadoLabel = rec.estadoOt === 'reprogramada' ? 'REPROGRAMADA' : computeEquipoEstado(rec.items || {}).label;
-  let html = `
+  const esActividadRec = rec.servicio === 'actividad';
+  const snap = rec.planSnapshot || {};
+  let html = esActividadRec ? `
+    <div style="margin-bottom:10px;">
+      <b>Actividad — ${esc(rec.area || snap.areaNombre || '—')}</b><br>
+      <span style="color:var(--muted);">${esc(snap.descripcion || '—')}</span><br>
+      <span style="color:var(--muted);">Folio: ${esc(rec.ninforme||'—')} · ${esc(rec.fecha||'')}</span><br>
+      <span style="color:var(--muted);">Técnico(s): ${esc(rec.tecnico||'—')} · Supervisor: ${esc(rec.supervisor||'—')}</span>
+    </div>` : `
     <div style="margin-bottom:10px;">
       <b>${esc(rec.equipoNombre||'')}</b><br>
       <span style="color:var(--muted);">${esc(rec.marca||'')} ${esc(rec.modelo||'')} · Serie ${esc(rec.serie||'—')}</span><br>
@@ -6208,6 +6381,11 @@ async function openLocalDetailReadOnly(id){
       <span style="color:var(--muted);">Técnico(s): ${esc(rec.tecnico||'—')} · Supervisor: ${esc(rec.supervisor||'—')}</span><br>
       <b style="color:var(--steel);">Estado: ${esc(estadoLabel||'—')}</b>
     </div>`;
+  if(esActividadRec){
+    if(rec.actividadEstadoInicial) html += `<div style="padding:8px 0;border-top:1px solid var(--line);"><b>Estado inicial:</b> ${esc(rec.actividadEstadoInicial)}</div>`;
+    if(rec.actividadTrabajo) html += `<div style="padding:8px 0;border-top:1px solid var(--line);"><b>Trabajo realizado:</b> ${esc(rec.actividadTrabajo)}</div>`;
+    if(rec.actividadObservaciones) html += `<div style="padding:8px 0;border-top:1px solid var(--line);"><b>Observaciones:</b> ${esc(rec.actividadObservaciones)}</div>`;
+  }
   if(rec.pdfUrl){
     html += `<a href="${esc(rec.pdfUrl)}" target="_blank" style="display:inline-block;margin-bottom:12px;padding:8px 12px;background:var(--steel);color:#fff;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none;">📄 Abrir PDF en Drive</a>`;
   }
@@ -6363,6 +6541,9 @@ async function loadRecordIntoForm(id){
   document.getElementById('f_correctivoProblema').value = rec.correctivoProblema || '';
   document.getElementById('f_correctivoTrabajo').value = rec.correctivoTrabajo || '';
   document.getElementById('f_correctivoDesviaciones').value = rec.correctivoDesviaciones || '';
+  document.getElementById('f_actividadEstadoInicial').value = rec.actividadEstadoInicial || '';
+  document.getElementById('f_actividadTrabajo').value = rec.actividadTrabajo || '';
+  document.getElementById('f_actividadObservaciones').value = rec.actividadObservaciones || '';
   document.getElementById('f_origenTrabajo').value = rec.origenTrabajo || '';
   document.getElementById('f_claseOrden').value = rec.claseOrden || '';
   document.getElementById('f_estadoOt').value = rec.estadoOt || '';
@@ -6375,7 +6556,7 @@ async function loadRecordIntoForm(id){
     document.getElementById('f_ot').readOnly = true;
     document.getElementById('f_origenTrabajo').disabled = true;
     document.getElementById('f_claseOrden').disabled = true;
-    document.getElementById('f_area').disabled = rec.planSnapshot.estadoMapeo === 'SEGURO';
+    document.getElementById('f_area').disabled = rec.planSnapshot.estadoMapeo === 'SEGURO' || (rec.planSnapshot.estadoMapeo === 'SIN_EQUIPO' && !!rec.planSnapshot.areaNombre);
     document.getElementById('f_equipo').disabled = rec.planSnapshot.estadoMapeo === 'SEGURO' || rec.planSnapshot.estadoMapeo === 'SIN_EQUIPO';
     document.getElementById('f_otPlan').value = rec.planSnapshot.ot || '';
     otPlanPrevValue = rec.planSnapshot.ot || '';
@@ -6401,7 +6582,7 @@ function historyRowHTML(item){
   const esConflicto = item.syncStatus === 'conflict';
   const esReprogramada = item.estadoOt === 'reprogramada';
   const inconsistentePM03 = esReprogramada && item.claseOrden === 'PM03';
-  const codigoServicio = item.servicio === 'inspeccion' ? 'IN' : item.servicio === 'correctivo' ? 'CO' : 'MT';
+  const codigoServicio = item.servicio === 'inspeccion' ? 'IN' : item.servicio === 'correctivo' ? 'CO' : item.servicio === 'actividad' ? 'AC' : 'MT';
   const badgeText = esConflicto ? '⚠' : esReprogramada ? (inconsistentePM03 ? '⚠' : 'RP') : ((item.equipoLabel||'').replace(/[^0-9]/g,'').slice(-2) || codigoServicio);
   let cls = 'bueno', chipText = 'Operativo';
   if(esConflicto){ cls = 'malo'; chipText = '⚠ Conflicto'; }
@@ -6774,7 +6955,7 @@ document.getElementById('btnPrint').addEventListener('click', async () => {
   toast('Generando PDF…');
   const filename = buildInformeFilename();
   try{
-    const doc = rec.estadoOt === 'reprogramada' ? await generarInformeReprogramacionPDF(rec) : await generarInformePDF(rec);
+    const doc = rec.estadoOt === 'reprogramada' ? await generarInformeReprogramacionPDF(rec) : (rec.servicio === 'actividad' ? await generarInformeActividadPDF(rec) : await generarInformePDF(rec));
     const blob = doc.output('blob');
     const file = new File([blob], filename, { type: 'application/pdf' });
     // navigator.share con archivo -> el nombre queda fijo de verdad (no depende de ningún título de página),
@@ -7323,7 +7504,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v32'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v32.1'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
