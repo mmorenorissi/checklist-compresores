@@ -126,12 +126,6 @@
   .entrega-item input[type=checkbox]{width:20px;height:20px;flex:none;margin-top:1px;}
   .entrega-item label{font-size:13px;line-height:1.35;}
 
-  .sig-wrap{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-  @media (max-width:480px){ .sig-wrap{grid-template-columns:1fr;} }
-  .sig-box{border:1.5px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;}
-  .sig-box canvas{width:100%;height:110px;display:block;touch-action:none;background:#FAFBFC;}
-  .sig-label{font-size:11px;font-weight:600;color:var(--muted);padding:6px 9px 0;text-transform:uppercase;letter-spacing:.03em;}
-  .sig-actions{display:flex;justify-content:flex-end;padding:4px 8px 8px;}
   .link-btn{background:none;border:none;color:var(--steel);font-size:11.5px;font-weight:600;cursor:pointer;padding:2px 4px;}
 
   .actionbar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);padding:10px 12px calc(10px + env(safe-area-inset-bottom));display:flex;gap:8px;z-index:30;box-shadow:0 -2px 10px rgba(0,0,0,.06);}
@@ -3051,21 +3045,9 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
     </div>
 
     <div class="card">
-      <div class="card-head"><h2>Cierre y firmas</h2></div>
+      <div class="card-head"><h2>Cierre</h2></div>
       <div class="card-pad">
-        <div class="sig-wrap">
-          <div class="sig-box">
-            <div class="sig-label">Firma técnico</div>
-            <canvas id="sigTecnico"></canvas>
-            <div class="sig-actions"><button class="link-btn" data-clear="sigTecnico">Borrar</button></div>
-          </div>
-          <div class="sig-box" id="sigBoxSupervisor">
-            <div class="sig-label">Firma supervisor</div>
-            <canvas id="sigSupervisor"></canvas>
-            <div class="sig-actions"><button class="link-btn" data-clear="sigSupervisor">Borrar</button></div>
-          </div>
-        </div>
-        <button class="btn-full" style="margin-top:14px;background:var(--paper);color:var(--ink);border:1.5px solid var(--line);" id="btnCompartir">📤 Compartir resumen (WhatsApp / Mail / etc.)</button>
+        <button class="btn-full" style="background:var(--paper);color:var(--ink);border:1.5px solid var(--line);" id="btnCompartir">📤 Compartir resumen (WhatsApp / Mail / etc.)</button>
       </div>
     </div>
     </div>
@@ -3127,7 +3109,7 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
         </div>
         <p style="font-size:11px;color:var(--muted);line-height:1.4;margin:10px 0 0;">
           Los datos del checklist se sincronizan con el historial compartido.
-          Las fotos y firmas no se almacenan por separado en Sheets; quedan
+          Las fotos no se almacenan por separado en Sheets; quedan
           incorporadas en el PDF del informe que se sube a Drive.
         </p>
       </div>
@@ -4146,6 +4128,8 @@ let itemState = {};           // { 'motor-0': {status:'', obs:''}, ... }  status
 let photoState = {};          // { 'motor-0': [dataURL,...] }
 let equipoPrevId = '';        // último equipo confirmado — para poder revertir si se cancela el cambio
 let intervaloPrevValue = '';  // ídem, para el intervalo de mantención
+let otPlanPrevValue = '';     // última OT del plan confirmada — para revertir el selector si se cancela el cambio
+let suprimirConfirmEquipoUnaVez = false; // evita que el cambio de equipo disparado por aplicarSeleccionPlan() pregunte de nuevo — ya se confirmó a nivel de OT
 function hayProgresoEnPauta(){
   return Object.values(itemState).some(s => s.status || (s.obs && s.obs.trim())) ||
          Object.values(photoState).some(arr => arr && arr.length);
@@ -4155,7 +4139,6 @@ let repuestosRec = [];        // [{descripcion,parte,cantidad,obs}]
 let plannedState = {};        // { activityId: {status:'realizado'|'no_realizado'|'na'|'', obs:''} }
 let plannedSnapshot = null;   // foto de la pauta usada en este registro (se guarda con el informe)
 let entregaState = {};        // { 0:true, 1:false, ... }
-let sigData = { sigTecnico:null, sigSupervisor:null };
 let histFilter = 'todos';
 let histDateFrom = '';
 let histDateTo = '';
@@ -4247,6 +4230,22 @@ async function commitFolio(area){
   return `${code}-COMP-${year}-${String(next).padStart(4,'0')}`;
 }
 
+// Punto único que decide si corresponde generar folio nuevo — se usa tanto en
+// el cambio manual de Área como en el QR y en la autocarga desde el Plan
+// Semanal (OT con mapping SEGURO), que asigna el Área por JS y por eso nunca
+// disparaba el 'change' que antes generaba el folio (bug real detectado en
+// prueba: N° de Informe quedaba vacío). No genera dos veces para la misma
+// área — solo si el área realmente cambió respecto al último folio emitido.
+async function asegurarFolioPorArea(area){
+  if(currentId || !area) return;
+  const ninformeEl = document.getElementById('f_ninforme');
+  if(ninformeEl.value && ninformeEl.dataset.autofolioArea === area) return;
+  const folio = await commitFolio(area);
+  ninformeEl.value = folio;
+  ninformeEl.dataset.autofolio = '1';
+  ninformeEl.dataset.autofolioArea = area;
+}
+
 /* ============================================================
    TABS
    ============================================================ */
@@ -4270,14 +4269,6 @@ async function goToView(name){
   if(name === 'home') renderHome();
   if(name === 'history'){ loadHistory(); loadSyncConfigIntoForm(); autoFetchRemoteOnEnter(); }
   if(name === 'equip'){ renderEquipList(); populateAreaSelectPlain('eArea'); renderTecnicosList(); renderSupervisoresList(); }
-  if(name === 'form'){
-    // el lienzo de firma se configuró la primera vez con el formulario oculto (medía 0x0);
-    // recién ahora que la vista es visible se puede calcular su tamaño real.
-    ['sigTecnico','sigSupervisor'].forEach(id => {
-      const c = document.getElementById(id);
-      if(c && c._resize) c._resize();
-    });
-  }
   window.scrollTo(0,0);
 }
 
@@ -4361,12 +4352,7 @@ async function procesarCodigoQR(texto){
 async function aplicarEquipoEscaneado(equipo){
   document.getElementById('f_area').value = equipo.area;
   populateFormEquipoSelect();
-  const ninformeEl = document.getElementById('f_ninforme');
-  if(!currentId && equipo.area && (!ninformeEl.value || ninformeEl.dataset.autofolio === '1')){
-    const folio = await commitFolio(equipo.area);
-    ninformeEl.value = folio;
-    ninformeEl.dataset.autofolio = '1';
-  }
+  await asegurarFolioPorArea(equipo.area);
   document.getElementById('f_equipo').value = equipo.id;
   document.getElementById('f_equipo').dispatchEvent(new Event('change'));
   toast('✓ Equipo identificado: ' + equipo.nombre);
@@ -4374,13 +4360,7 @@ async function aplicarEquipoEscaneado(equipo){
 
 document.getElementById('f_area').addEventListener('change', async () => {
   populateFormEquipoSelect();
-  const area = document.getElementById('f_area').value;
-  const ninformeEl = document.getElementById('f_ninforme');
-  if(!currentId && area && (!ninformeEl.value || ninformeEl.dataset.autofolio === '1')){
-    const folio = await commitFolio(area);
-    ninformeEl.value = folio;
-    ninformeEl.dataset.autofolio = '1';
-  }
+  await asegurarFolioPorArea(document.getElementById('f_area').value);
 });
 function populateFormEquipoSelect(){
   const sel = document.getElementById('f_equipo');
@@ -4402,7 +4382,9 @@ function populateFormEquipoSelect(){
   applyEquipoToForm(null); // limpio hasta que se elija un equipo puntual
 }
 document.getElementById('f_equipo').addEventListener('change', (e) => {
-  if(hayProgresoEnPauta() && !confirm('Cambiar de equipo eliminará las respuestas y fotos ya ingresadas en esta pauta. ¿Continuar?')){
+  const saltarConfirm = suprimirConfirmEquipoUnaVez;
+  suprimirConfirmEquipoUnaVez = false;
+  if(!saltarConfirm && hayProgresoEnPauta() && !confirm('Cambiar de equipo eliminará las respuestas y fotos ya ingresadas en esta pauta. ¿Continuar?')){
     e.target.value = equipoPrevId;
     return;
   }
@@ -4720,7 +4702,7 @@ async function renderHomeRecent(){
   idx = idx.slice(0,4);
   if(!idx.length){ box.innerHTML = `<div class="card-pad empty-state" style="padding:24px 14px;">Aún no hay registros. Elige Mantenimiento, Inspección o Correctivo para comenzar.</div>`; return; }
   box.innerHTML = idx.map(r => historyRowHTML(r)).join('');
-  box.querySelectorAll('[data-open]').forEach(el => el.addEventListener('click', () => loadRecordIntoForm(el.dataset.open)));
+  box.querySelectorAll('[data-open]').forEach(el => el.addEventListener('click', () => openLocalDetailReadOnly(el.dataset.open)));
 }
 
 /* ============================================================
@@ -4736,6 +4718,7 @@ let draftInterval = null;
 async function autosaveDraft(){
   if(!document.getElementById('view-form').classList.contains('active')) return;
   if(!currentServicio) return;
+  if(currentId) return; // jamás crear borrador desde un registro ya guardado — es un documento histórico, no trabajo en curso
   try{
     const rec = buildRecord();
     rec.esBorrador = true;
@@ -4785,7 +4768,6 @@ async function resumeDraft(draft){
   entregaState = draft.entrega || {};
   plannedState = draft.plannedState || {};
   plannedSnapshot = draft.maintenancePlanSnapshot || null;
-  sigData.sigTecnico = draft.sigTecnico; sigData.sigSupervisor = draft.sigSupervisor;
 
   document.getElementById('formTitle').textContent = servicioLabelCorto(draft.servicio);
   document.getElementById('recIdLabel').textContent = 'borrador recuperado';
@@ -4832,7 +4814,15 @@ async function resumeDraft(draft){
   actualizarClaseOrdenAuto();
   aplicarEstadoOtVisibilidad();
   sincronizarUiOrigenOt();
-  if(draft.planSnapshot){
+  if(currentServicio === 'correctivo'){
+    // Correctivo nunca tiene vínculo con el Plan Semanal — normaliza cualquier
+    // borrador legado que lo tuviera, en vez de revivirlo (§7). f_origenTrabajo
+    // ya quedó forzado a no_programado/disabled por sincronizarUiOrigenOt().
+    planItemSeleccionado = null;
+    document.getElementById('f_ot').readOnly = false;
+    document.getElementById('f_area').disabled = false;
+    document.getElementById('f_equipo').disabled = false;
+  } else if(draft.planSnapshot){
     planItemSeleccionado = draft.planSnapshot;
     document.getElementById('f_ot').readOnly = true;
     document.getElementById('f_origenTrabajo').disabled = true;
@@ -4840,6 +4830,7 @@ async function resumeDraft(draft){
     document.getElementById('f_area').disabled = draft.planSnapshot.estadoMapeo === 'SEGURO';
     document.getElementById('f_equipo').disabled = draft.planSnapshot.estadoMapeo === 'SEGURO';
     document.getElementById('f_otPlan').value = draft.planSnapshot.ot || '';
+    otPlanPrevValue = draft.planSnapshot.ot || '';
   } else {
     planItemSeleccionado = null;
     document.getElementById('f_ot').readOnly = false;
@@ -4850,7 +4841,6 @@ async function resumeDraft(draft){
 
   renderSections(); renderRepuestosUsados(); renderRepuestosRec(); renderEntregaChecklist(); updateSummary();
   goToView('form');
-  setTimeout(() => { setupSignature('sigTecnico'); setupSignature('sigSupervisor'); }, 30);
   toast('✓ Borrador recuperado — sigue donde quedaste');
 }
 
@@ -4908,6 +4898,7 @@ function actualizarClaseOrdenAuto(){
 }
 document.getElementById('f_origenTrabajo').addEventListener('change', async () => {
   actualizarClaseOrdenAuto();
+  if(currentServicio === 'correctivo'){ sincronizarUiOrigenOt(); return; } // defensivo — el select ya viene disabled, esto es una segunda capa
   const origen = document.getElementById('f_origenTrabajo').value;
   document.getElementById('otManualWrap').style.display = (origen === 'no_programado') ? '' : 'none';
   if(origen === 'programado'){
@@ -4936,7 +4927,6 @@ function startNewForm(servicio){
   repuestosUsados = [];
   repuestosRec = [];
   entregaState = {};
-  sigData = { sigTecnico:null, sigSupervisor:null };
   plannedState = {};
   plannedSnapshot = null;
 
@@ -4951,6 +4941,7 @@ function startNewForm(servicio){
   populateFormIntervalo();
   equipoPrevId = '';
   intervaloPrevValue = '';
+  otPlanPrevValue = '';
 
   // se arma DESPUÉS de limpiar los selects, para que la pauta inicial no herede
   // el equipo/intervalo de un registro anterior
@@ -4960,6 +4951,7 @@ function startNewForm(servicio){
   const ninformeEl = document.getElementById('f_ninforme');
   ninformeEl.value = '';
   delete ninformeEl.dataset.autofolio;
+  delete ninformeEl.dataset.autofolioArea;
   document.getElementById('f_ot').value = '';
   document.getElementById('f_fecha').value = todayISO();
   document.getElementById('f_tiposervicio').value = servicio === 'inspeccion' ? 'INSPECCIÓN GENERAL' : servicio === 'correctivo' ? 'MANTENIMIENTO CORRECTIVO' : 'MANTENIMIENTO';
@@ -4989,9 +4981,6 @@ function startNewForm(servicio){
   document.getElementById('f_equipo').disabled = false;
   sincronizarUiOrigenOt();
   document.getElementById('f_otPlan').value = '';
-
-  clearSignatureCanvas('sigTecnico');
-  clearSignatureCanvas('sigSupervisor');
 
   renderSections();
   renderRepuestosUsados();
@@ -5130,10 +5119,8 @@ function computeEquipoEstado(items){
   const valores = Object.values(items);
   const malos = valores.filter(s => s.status === 'malo');
   const regulares = valores.filter(s => s.status === 'regular');
-  const pendientes = valores.filter(s => !s.status);
   if(malos.some(s => s.criticidad === 'critica' || s.criticidad === 'alta')) return { label:'NO OPERATIVO', cls:'malo' };
   if(malos.length || regulares.length) return { label:'OPERATIVO CON OBSERVACIONES', cls:'regular' };
-  if(pendientes.length) return { label:'CHECKLIST INCOMPLETO', cls:'regular' };
   return { label:'OPERATIVO', cls:'bueno' };
 }
 
@@ -5153,15 +5140,11 @@ function updateSummary(){
   document.getElementById('sumPend').textContent = pend;
 
   const badge = document.getElementById('estadoEquipoBadge');
-  if(bueno+regular+malo > 0){
-    const estado = computeEquipoEstado(itemState);
-    badge.style.display = 'block';
-    badge.textContent = 'ESTADO DEL EQUIPO: ' + estado.label;
-    badge.style.background = estado.cls==='malo' ? 'var(--malo-bg)' : estado.cls==='regular' ? 'var(--regular-bg)' : 'var(--bueno-bg)';
-    badge.style.color = estado.cls==='malo' ? 'var(--malo)' : estado.cls==='regular' ? 'var(--regular)' : 'var(--bueno)';
-  } else {
-    badge.style.display = 'none';
-  }
+  const estado = computeEquipoEstado(itemState);
+  badge.style.display = 'block';
+  badge.textContent = 'ESTADO DEL EQUIPO: ' + estado.label;
+  badge.style.background = estado.cls==='malo' ? 'var(--malo-bg)' : estado.cls==='regular' ? 'var(--regular-bg)' : 'var(--bueno-bg)';
+  badge.style.color = estado.cls==='malo' ? 'var(--malo)' : estado.cls==='regular' ? 'var(--regular)' : 'var(--bueno)';
 }
 
 /* ---- repuestos utilizados (dinámico) ---- */
@@ -5237,7 +5220,6 @@ function renderEntregaChecklist(){
   // en Inspección, "Estado inicial" y "Hallazgo/anomalía" ahora viven en el checklist principal
   // (sectionsWrap), con foto/observación — este casillero clásico queda solo para Mantención y Correctivo.
   document.getElementById('entregaItems').style.display = esInspeccion ? 'none' : '';
-  document.getElementById('sigBoxSupervisor').style.display = esInspeccion ? 'none' : '';
   if(esInspeccion) return;
 
   // §17 — Correctivo usa su propia pauta de cierre, no ENTREGA_ITEMS (que trae ítems
@@ -5258,37 +5240,6 @@ function renderEntregaChecklist(){
 /* ============================================================
    FIRMAS (canvas)
    ============================================================ */
-function setupSignature(id){
-  const canvas = document.getElementById(id);
-  function resize(){
-    const rect = canvas.getBoundingClientRect();
-    const ratio = window.devicePixelRatio || 1;
-    canvas.width = rect.width * ratio; canvas.height = rect.height * ratio;
-    const ctx = canvas.getContext('2d');
-    ctx.scale(ratio, ratio);
-    ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.strokeStyle = '#161A20';
-    if(sigData[id]){ const im=new Image(); im.onload=()=>ctx.drawImage(im,0,0,rect.width,rect.height); im.src=sigData[id]; }
-  }
-  resize();
-  window.addEventListener('resize', resize);
-  let drawing=false, last=null;
-  function pos(e){ const r=canvas.getBoundingClientRect(); const t=e.touches?e.touches[0]:e; return {x:t.clientX-r.left, y:t.clientY-r.top}; }
-  function start(e){ e.preventDefault(); drawing=true; last=pos(e); }
-  function move(e){ if(!drawing) return; e.preventDefault(); const ctx=canvas.getContext('2d'); const p=pos(e); ctx.beginPath(); ctx.moveTo(last.x,last.y); ctx.lineTo(p.x,p.y); ctx.stroke(); last=p; }
-  function end(){ if(!drawing) return; drawing=false; sigData[id]=canvas.toDataURL('image/png'); }
-  canvas.addEventListener('pointerdown', start);
-  canvas.addEventListener('pointermove', move);
-  window.addEventListener('pointerup', end);
-  canvas._resize = resize;
-}
-function clearSignatureCanvas(id){
-  const canvas = document.getElementById(id);
-  canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height);
-  sigData[id] = null;
-}
-document.querySelectorAll('[data-clear]').forEach(btn => btn.addEventListener('click', () => clearSignatureCanvas(btn.dataset.clear)));
-setupSignature('sigTecnico'); setupSignature('sigSupervisor');
-
 /* ============================================================
    GUARDAR / CARGAR / ELIMINAR
    ============================================================ */
@@ -5355,9 +5306,7 @@ function buildRecord(){
     hallazgos: document.getElementById('f_hallazgos').value,
     correctivoProblema: document.getElementById('f_correctivoProblema').value,
     correctivoTrabajo: document.getElementById('f_correctivoTrabajo').value,
-    correctivoDesviaciones: document.getElementById('f_correctivoDesviaciones').value,
-    sigTecnico: sigData.sigTecnico,
-    sigSupervisor: sigData.sigSupervisor
+    correctivoDesviaciones: document.getElementById('f_correctivoDesviaciones').value
   };
 }
 function summarizeItems(items){
@@ -5674,6 +5623,23 @@ function renderPlanSemanalBadge(){
    mezclado con el flujo No programado. */
 let planItemSeleccionado = null;
 
+// Formatea fechaPrograma a DD-MM-YYYY para mostrar — nunca altera el valor
+// real guardado en el ítem. Defensivo: el contrato ideal es "YYYY-MM-DD",
+// pero a veces llega ya convertido a fecha completa (con día de semana, hora
+// y zona horaria) — en ese caso igual se extrae solo la fecha, sin GMT/hora.
+function formatFechaProgramaCorta(valor){
+  if(!valor) return '—';
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(valor);
+  if(iso) return `${iso[3]}-${iso[2]}-${iso[1]}`;
+  const d = new Date(valor);
+  if(!isNaN(d.getTime())){
+    const dd = String(d.getDate()).padStart(2,'0');
+    const mm = String(d.getMonth()+1).padStart(2,'0');
+    return `${dd}-${mm}-${d.getFullYear()}`;
+  }
+  return valor; // no se pudo interpretar — se muestra tal cual, nunca se inventa
+}
+
 function poblarSelectorOtPlan(){
   const wrap = document.getElementById('otPlanWrap');
   const origen = document.getElementById('f_origenTrabajo').value;
@@ -5689,9 +5655,7 @@ function poblarSelectorOtPlan(){
       // seleccionable para iniciar una nueva ejecución normal (§6/§12).
       const bloqueada = it.estado === 'ejecutada' || it.estadoMapeo === 'CONFLICTO';
       const prefijo = it.estadoMapeo === 'CONFLICTO' ? '⛔ CONFLICTO — ' : '';
-      // Solo cambia la presentación (dd/mm/yyyy) — el valor real de item.fechaPrograma no se toca.
-      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(it.fechaPrograma || '');
-      const fechaFmt = m ? `${m[3]}/${m[2]}/${m[1]}` : (it.fechaPrograma || '—');
+      const fechaFmt = formatFechaProgramaCorta(it.fechaPrograma);
       return `<option value="${esc(it.ot)}" ${bloqueada ? 'disabled' : ''}>${prefijo}${esc(it.ot)} — ${esc(fechaFmt)} — ${esc(it.descripcion || it.equipoNombre || '—')} · ${esc(estadoLabel[it.estado] || it.estado || '')}</option>`;
     }).join('');
   // conserva la selección si el ítem sigue existiendo (ej. tras un refresh en segundo plano)
@@ -5701,12 +5665,26 @@ function poblarSelectorOtPlan(){
 // Muestra el selector del plan o el campo manual según el Origen — nunca los
 // dos a la vez, nunca ninguno (Programado = plan; No programado = manual).
 function sincronizarUiOrigenOt(){
-  const origen = document.getElementById('f_origenTrabajo').value;
+  const origenSel = document.getElementById('f_origenTrabajo');
+  // Correctivo es siempre No programado/PM03/Ejecutada — no una consecuencia de
+  // elegir Origen, sino una regla fija del servicio. Se refuerza acá (no solo al
+  // deshabilitar el <select>) para que sea estructuralmente imposible llegar al
+  // Plan Semanal desde este flujo, sin depender del aviso de "servicio vs OT".
+  if(currentServicio === 'correctivo'){
+    origenSel.value = 'no_programado';
+    origenSel.disabled = true;
+    document.getElementById('otPlanWrap').style.display = 'none';
+    document.getElementById('otManualWrap').style.display = '';
+    planItemSeleccionado = null;
+    actualizarClaseOrdenAuto();
+    return;
+  }
+  const origen = origenSel.value;
   document.getElementById('otManualWrap').style.display = (origen === 'no_programado') ? '' : 'none';
   poblarSelectorOtPlan();
 }
 
-function aplicarSeleccionPlan(item){
+async function aplicarSeleccionPlan(item){
   if(item.estado === 'ejecutada' || item.estadoMapeo === 'CONFLICTO'){
     // defensivo — la opción ya viene disabled, esto solo cubre el caso borde
     document.getElementById('f_otPlan').value = '';
@@ -5750,6 +5728,7 @@ function aplicarSeleccionPlan(item){
     document.getElementById('f_area').value = equipoPlan.area;
     document.getElementById('f_area').disabled = true;
     populateFormEquipoSelect();
+    await asegurarFolioPorArea(equipoPlan.area);
     document.getElementById('f_equipo').value = equipoPlan.id;
     document.getElementById('f_equipo').dispatchEvent(new Event('change'));
     document.getElementById('f_equipo').disabled = true;
@@ -5778,11 +5757,18 @@ function limpiarVinculoPlan(){
   actualizarClaseOrdenAuto();
 }
 
-document.getElementById('f_otPlan').addEventListener('change', (e) => {
+document.getElementById('f_otPlan').addEventListener('change', async (e) => {
   const ot = e.target.value;
   if(!ot) return; // el placeholder viene disabled — no debería dispararse, es solo defensivo
   const item = ((planSemanalActivo && planSemanalActivo.items) || []).find(it => it.ot === ot);
-  if(item) aplicarSeleccionPlan(item);
+  if(!item) return;
+  if(hayProgresoEnPauta() && !confirm('Cambiar de OT eliminará/reiniciará las respuestas y fotos ya ingresadas en esta pauta. ¿Continuar?')){
+    e.target.value = otPlanPrevValue; // nada se mutó todavía — solo hay que devolver el selector a su valor anterior
+    return;
+  }
+  otPlanPrevValue = ot;
+  suprimirConfirmEquipoUnaVez = true; // ya se confirmó acá — el cambio de equipo que dispara aplicarSeleccionPlan no debe preguntar de nuevo
+  await aplicarSeleccionPlan(item);
 });
 
 document.getElementById('btnActualizarPlan').addEventListener('click', async () => {
@@ -5815,8 +5801,6 @@ function buildSyncPayload(rec){
   Object.keys(liviano.photos || {}).forEach(k => { if((liviano.photos[k]||[]).length) fotosResumen[k] = liviano.photos[k].length; });
   liviano.photos = {};
   liviano.fotosResumen = fotosResumen;
-  liviano.sigTecnico = liviano.sigTecnico ? true : false;
-  liviano.sigSupervisor = liviano.sigSupervisor ? true : false;
   // Una OT Reprogramada no completó el checklist técnico — no se le puede
   // inventar una condición técnica ("Checklist incompleto" sería un dato falso).
   liviano.estado = rec.estadoOt === 'reprogramada' ? '' : computeEquipoEstado(rec.items).label;
@@ -6131,6 +6115,45 @@ async function remoteRowHTML(item){
     <div class="hist-chip" style="${cls==='malo'?'background:var(--malo-bg);color:var(--malo);':cls==='regular'?'background:var(--regular-bg);color:var(--regular);':'background:var(--bueno-bg);color:var(--bueno);'}">${esc(estado || 'remoto')}</div>
   </div>`;
 }
+// Registro guardado/sincronizado = documento histórico — se visualiza, nunca se
+// edita desde acá (Historial/Inicio). Reutiliza el mismo modal de detalle que
+// openRemoteDetail, pero lee directo de IndexedDB, sin red (local-first).
+async function openLocalDetailReadOnly(id){
+  const body = document.getElementById('remoteModalBody');
+  body.innerHTML = 'Cargando…';
+  document.getElementById('remoteModal').classList.add('show');
+  const rec = await storage.get('registro:' + id);
+  if(!rec){ body.innerHTML = 'No se pudo cargar el registro.'; return; }
+  const estadoLabel = rec.estadoOt === 'reprogramada' ? 'REPROGRAMADA' : computeEquipoEstado(rec.items || {}).label;
+  let html = `
+    <div style="margin-bottom:10px;">
+      <b>${esc(rec.equipoNombre||'')}</b><br>
+      <span style="color:var(--muted);">${esc(rec.marca||'')} ${esc(rec.modelo||'')} · Serie ${esc(rec.serie||'—')}</span><br>
+      <span style="color:var(--muted);">Folio: ${esc(rec.ninforme||'—')} · ${esc(rec.fecha||'')}</span><br>
+      <span style="color:var(--muted);">Técnico(s): ${esc(rec.tecnico||'—')} · Supervisor: ${esc(rec.supervisor||'—')}</span><br>
+      <b style="color:var(--steel);">Estado: ${esc(estadoLabel||'—')}</b>
+    </div>`;
+  if(rec.pdfUrl){
+    html += `<a href="${esc(rec.pdfUrl)}" target="_blank" style="display:inline-block;margin-bottom:12px;padding:8px 12px;background:var(--steel);color:#fff;border-radius:8px;font-weight:700;font-size:13px;text-decoration:none;">📄 Abrir PDF en Drive</a>`;
+  }
+  const desc = rec.itemsDescriptivos || {};
+  const evaluadosEntries = Object.entries(rec.items || {}).filter(([k,s]) => s.status === 'bueno' || s.status === 'regular' || s.status === 'malo');
+  if(evaluadosEntries.length){
+    html += `<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px;">Ítems evaluados (${evaluadosEntries.length})</div>`;
+    evaluadosEntries.forEach(([key, s]) => {
+      const c = s.status==='malo' ? 'var(--malo)' : s.status==='regular' ? 'var(--regular)' : 'var(--bueno)';
+      const texto = desc[key] ? desc[key].texto : key;
+      const tipo = desc[key] ? (desc[key].tipo || 'estado') : 'estado';
+      html += `<div style="padding:7px 0;border-top:1px solid var(--line);"><b style="color:${c};">[${esc(labelParaValor(tipo, s.status))}]</b> ${esc(texto)}${s.obs ? '<br><span style="color:var(--muted);">'+esc(s.obs)+'</span>' : ''}</div>`;
+    });
+  }
+  if(rec.hallazgos) html += `<div style="margin-top:10px;padding:8px 10px;background:var(--paper);border-radius:8px;"><b>Hallazgos:</b> ${esc(rec.hallazgos)}</div>`;
+  if(rec.syncStatus === 'conflict' && rec.conflictInfo){
+    html += `<div style="margin-top:10px;padding:10px 12px;background:var(--malo-bg);color:var(--malo);border-radius:8px;font-size:12.5px;white-space:pre-line;">${esc(construirMensajeConflicto(rec))}</div>`;
+  }
+  html += `<p style="margin-top:14px;font-size:11px;color:var(--muted);">📷 Las fotos de este registro quedan incorporadas en el PDF del informe.</p>`;
+  body.innerHTML = html;
+}
 async function openRemoteDetail(id){
   const cfg = await getSyncConfig();
   if(!cfg) return;
@@ -6171,7 +6194,7 @@ async function openRemoteDetail(id){
     } else {
       html += `<p style="color:var(--muted);font-style:italic;">Este registro es anterior a la sincronización de detalle, o no se pudo reconstruir el detalle completo.</p>`;
     }
-    html += `<p style="margin-top:14px;font-size:11px;color:var(--muted);">📷 Las fotos y firmas de este registro quedan incorporadas en el PDF del informe.</p>`;
+    html += `<p style="margin-top:14px;font-size:11px;color:var(--muted);">📷 Las fotos de este registro quedan incorporadas en el PDF del informe.</p>`;
     body.innerHTML = html;
   }catch(e){ body.innerHTML = 'Error al cargar el registro.'; }
 }
@@ -6221,7 +6244,6 @@ async function loadRecordIntoForm(id){
   repuestosUsados = rec.repuestosUsados || []; repuestosRec = rec.repuestosRec || [];
   entregaState = rec.entrega || {};
   plannedState = rec.plannedState || {};
-  sigData.sigTecnico = rec.sigTecnico; sigData.sigSupervisor = rec.sigSupervisor;
 
   document.getElementById('formTitle').textContent = servicioLabelCorto(rec.servicio);
   document.getElementById('recIdLabel').textContent = 'guardado · ' + rec.id;
@@ -6281,6 +6303,7 @@ async function loadRecordIntoForm(id){
     document.getElementById('f_area').disabled = rec.planSnapshot.estadoMapeo === 'SEGURO';
     document.getElementById('f_equipo').disabled = rec.planSnapshot.estadoMapeo === 'SEGURO';
     document.getElementById('f_otPlan').value = rec.planSnapshot.ot || '';
+    otPlanPrevValue = rec.planSnapshot.ot || '';
   } else {
     planItemSeleccionado = null;
     document.getElementById('f_ot').readOnly = false;
@@ -6291,7 +6314,6 @@ async function loadRecordIntoForm(id){
 
   renderSections(); renderRepuestosUsados(); renderRepuestosRec(); renderEntregaChecklist(); updateSummary();
   goToView('form');
-  setTimeout(() => { setupSignature('sigTecnico'); setupSignature('sigSupervisor'); }, 30);
 }
 
 /* ============================================================
@@ -6412,7 +6434,7 @@ async function loadHistory(){
   }));
 
   list.innerHTML = filasHTML.join('');
-  list.querySelectorAll('[data-open]').forEach(el => el.addEventListener('click', () => loadRecordIntoForm(el.dataset.open)));
+  list.querySelectorAll('[data-open]').forEach(el => el.addEventListener('click', () => openLocalDetailReadOnly(el.dataset.open)));
   list.querySelectorAll('[data-remote]').forEach(el => el.addEventListener('click', () => openRemoteDetail(el.dataset.remote)));
   list.querySelectorAll('[data-del]').forEach(el => el.addEventListener('click', async (e) => {
     e.stopPropagation();
@@ -6790,7 +6812,6 @@ async function generarInformePDF(rec){
   const repuestosUsados = rec.repuestosUsados || [];
   const repuestosRec = rec.repuestosRec || [];
   const entregaState = rec.entrega || [];
-  const sigData = { sigTecnico: rec.sigTecnico || null, sigSupervisor: rec.sigSupervisor || null };
 
   const equipoSel = equipos.find(e => e.id === rec.equipoId);
   const equipoNombre = rec.equipoNombre || (interno !== '—' ? interno : 'Equipo');
@@ -7010,15 +7031,6 @@ async function generarInformePDF(rec){
   y = pdfEnsureSpace(doc, y, 30);
   doc.setFontSize(9);
   doc.text(`Entregado a: ${entregadoA}   Cargo: ${cargo}   Fecha/Hora: ${fecha} / ${horatermino}`, marginX, y); y += 8;
-  doc.text('Firma técnico:', marginX, y);
-  if(!esInspeccion) doc.text('Firma supervisor:', marginX + 95, y);
-  y += 3;
-  if(sigData.sigTecnico){ try{ doc.addImage(sigData.sigTecnico, 'PNG', marginX, y, 70, 22); }catch(e){} }
-  else { doc.line(marginX, y+15, marginX+70, y+15); }
-  if(!esInspeccion){
-    if(sigData.sigSupervisor){ try{ doc.addImage(sigData.sigSupervisor, 'PNG', marginX+95, y, 70, 22); }catch(e){} }
-    else { doc.line(marginX+95, y+15, marginX+165, y+15); }
-  }
 
   return doc;
 }
@@ -7145,10 +7157,6 @@ function buildPrintArea(){
   ENTREGA_ITEMS.forEach((txt,i) => { html += `<tr><td>${esc(txt)}</td><td>${entregaState[i] ? 'SÍ' : '—'}</td></tr>`; });
   html += `</table>`;
   html += `<div class="p-item" style="margin-top:8px;">Entregado a: <b>${esc(entregadoA)}</b> &nbsp;·&nbsp; Cargo: <b>${esc(cargo)}</b> &nbsp;·&nbsp; Fecha/Hora: ${esc(fecha)} / ${esc(horatermino)}</div>`;
-  html += `<div class="p-item" style="display:flex;gap:24px;margin-top:10px;">
-      <div>Firma técnico:<br>${sigData.sigTecnico ? `<img src="${sigData.sigTecnico}" style="height:55px;">` : '________________________'}</div>
-      <div>Firma supervisor:<br>${sigData.sigSupervisor ? `<img src="${sigData.sigSupervisor}" style="height:55px;">` : '________________________'}</div>
-    </div>`;
 
   document.getElementById('printArea').innerHTML = html;
 }
@@ -7240,7 +7248,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v30'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v31'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
