@@ -2848,8 +2848,12 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
         <div class="field" id="otPlanWrap" style="display:none;">
           <label>OT programada (plan semanal)</label>
           <select id="f_otPlan">
-            <option value="">— Escribir OT manualmente —</option>
+            <option value="" disabled selected>Selecciona una OT del plan...</option>
           </select>
+        </div>
+        <div class="field" id="otManualWrap" style="display:none;">
+          <label>N° de OT *</label>
+          <input type="text" id="f_ot" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="Obligatorio · solo números" oninput="this.value=this.value.replace(/\D/g,'')">
         </div>
         <div class="row2">
           <div class="field">
@@ -2916,7 +2920,6 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
           <div class="field"><label>N° de Informe</label><input type="text" id="f_ninforme"></div>
           <div class="field"><label>Fecha</label><input type="date" id="f_fecha"></div>
         </div>
-        <div class="field"><label>N° de OT *</label><input type="text" id="f_ot" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder="Obligatorio · solo números" oninput="this.value=this.value.replace(/\D/g,'')"></div>
         <div class="field"><label>Tipo de Servicio</label><input type="text" id="f_tiposervicio"></div>
         <div class="row2">
           <div class="field"><label>Hora de Inicio</label><input type="time" id="f_horainicio"></div>
@@ -4829,7 +4832,7 @@ async function resumeDraft(draft){
   document.getElementById('f_motivoReprogramacion').value = draft.motivoReprogramacion || '';
   actualizarClaseOrdenAuto();
   aplicarEstadoOtVisibilidad();
-  poblarSelectorOtPlan();
+  sincronizarUiOrigenOt();
   if(draft.planSnapshot){
     planItemSeleccionado = draft.planSnapshot;
     document.getElementById('f_ot').readOnly = true;
@@ -4905,7 +4908,9 @@ function actualizarClaseOrdenAuto(){
 document.getElementById('f_origenTrabajo').addEventListener('change', async () => {
   actualizarClaseOrdenAuto();
   const origen = document.getElementById('f_origenTrabajo').value;
+  document.getElementById('otManualWrap').style.display = (origen === 'no_programado') ? '' : 'none';
   if(origen === 'programado'){
+    document.getElementById('f_ot').value = ''; // no arrastra una OT manual PM03 al flujo Programado
     poblarSelectorOtPlan(); // muestra ya con lo que haya en caché, sin esperar la red
     actualizarPlanSemanal({ forzar:true }).then(poblarSelectorOtPlan).catch(()=>{});
   } else {
@@ -4980,7 +4985,7 @@ function startNewForm(servicio){
   document.getElementById('f_ot').readOnly = false;
   document.getElementById('f_origenTrabajo').disabled = false;
   document.getElementById('f_equipo').disabled = false;
-  poblarSelectorOtPlan();
+  sincronizarUiOrigenOt();
   document.getElementById('f_otPlan').value = '';
 
   clearSignatureCanvas('sigTecnico');
@@ -5670,13 +5675,13 @@ let planItemSeleccionado = null;
 function poblarSelectorOtPlan(){
   const wrap = document.getElementById('otPlanWrap');
   const origen = document.getElementById('f_origenTrabajo').value;
-  const items = (planSemanalActivo && planSemanalActivo.items) || [];
-  if(origen !== 'programado' || !items.length){ wrap.style.display = 'none'; return; }
+  if(origen !== 'programado'){ wrap.style.display = 'none'; return; }
   wrap.style.display = '';
+  const items = (planSemanalActivo && planSemanalActivo.items) || [];
   const sel = document.getElementById('f_otPlan');
   const valorPrevio = sel.value;
   const estadoLabel = { pendiente:'Pendiente', ejecutada:'✓ Ejecutada', reprogramada:'Reprogramada' };
-  sel.innerHTML = '<option value="">— Escribir OT manualmente —</option>' +
+  sel.innerHTML = '<option value="" disabled selected>Selecciona una OT del plan...</option>' +
     items.map(it => {
       // Ejecutada o con Conflicto de mapeo: visible para trazabilidad, pero NO
       // seleccionable para iniciar una nueva ejecución normal (§6/§12).
@@ -5686,6 +5691,14 @@ function poblarSelectorOtPlan(){
     }).join('');
   // conserva la selección si el ítem sigue existiendo (ej. tras un refresh en segundo plano)
   if(items.some(it => it.ot === valorPrevio)) sel.value = valorPrevio;
+}
+
+// Muestra el selector del plan o el campo manual según el Origen — nunca los
+// dos a la vez, nunca ninguno (Programado = plan; No programado = manual).
+function sincronizarUiOrigenOt(){
+  const origen = document.getElementById('f_origenTrabajo').value;
+  document.getElementById('otManualWrap').style.display = (origen === 'no_programado') ? '' : 'none';
+  poblarSelectorOtPlan();
 }
 
 function aplicarSeleccionPlan(item){
@@ -5738,22 +5751,25 @@ function aplicarSeleccionPlan(item){
   }
 }
 
-// Limpia todo lo que vino del plan (OT/Clase/Equipo desbloqueados,
-// planSnapshot fuera) — usado tanto al elegir "escribir manual" en el
-// selector como al cambiar Origen fuera de Programado (§17/§20).
+// Limpia todo lo que vino del plan (OT/Clase/Equipo desbloqueados y sin
+// valor, planSnapshot fuera) — se usa al cambiar Origen fuera de Programado,
+// para no dejar ningún residuo de la OT del plan anterior (§17/§20).
 function limpiarVinculoPlan(){
   planItemSeleccionado = null;
   const otInput = document.getElementById('f_ot');
   otInput.readOnly = false;
   otInput.value = '';
   document.getElementById('f_origenTrabajo').disabled = false;
-  document.getElementById('f_equipo').disabled = false;
+  const equipoSel = document.getElementById('f_equipo');
+  equipoSel.disabled = false;
+  equipoSel.value = '';
+  equipoSel.dispatchEvent(new Event('change'));
   actualizarClaseOrdenAuto();
 }
 
 document.getElementById('f_otPlan').addEventListener('change', (e) => {
   const ot = e.target.value;
-  if(!ot){ limpiarVinculoPlan(); return; }
+  if(!ot) return; // el placeholder viene disabled — no debería dispararse, es solo defensivo
   const item = ((planSemanalActivo && planSemanalActivo.items) || []).find(it => it.ot === ot);
   if(item) aplicarSeleccionPlan(item);
 });
@@ -6241,7 +6257,7 @@ async function loadRecordIntoForm(id){
   document.getElementById('f_motivoReprogramacion').value = rec.motivoReprogramacion || '';
   actualizarClaseOrdenAuto();
   aplicarEstadoOtVisibilidad();
-  poblarSelectorOtPlan();
+  sincronizarUiOrigenOt();
   if(rec.planSnapshot){
     planItemSeleccionado = rec.planSnapshot;
     document.getElementById('f_ot').readOnly = true;
@@ -7207,7 +7223,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v25'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v26'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
