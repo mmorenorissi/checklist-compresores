@@ -2893,6 +2893,12 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
     <div class="card" style="border:2px solid var(--steel);">
       <div class="card-head"><h2>Origen y estado de la OT</h2></div>
       <div class="card-pad">
+        <div class="field" id="otPlanWrap" style="display:none;">
+          <label>OT programada (plan semanal)</label>
+          <select id="f_otPlan">
+            <option value="">— Escribir OT manualmente —</option>
+          </select>
+        </div>
         <div class="row2">
           <div class="field">
             <label>Origen del trabajo *</label>
@@ -4817,6 +4823,20 @@ async function resumeDraft(draft){
   document.getElementById('f_motivoReprogramacion').value = draft.motivoReprogramacion || '';
   actualizarClaseOrdenAuto();
   aplicarEstadoOtVisibilidad();
+  poblarSelectorOtPlan();
+  if(draft.planSnapshot){
+    planItemSeleccionado = draft.planSnapshot;
+    document.getElementById('f_ot').readOnly = true;
+    document.getElementById('f_origenTrabajo').disabled = true;
+    document.getElementById('f_claseOrden').disabled = true;
+    document.getElementById('f_equipo').disabled = draft.planSnapshot.estadoMapeo === 'SEGURO';
+    document.getElementById('f_otPlan').value = draft.planSnapshot.ot || '';
+  } else {
+    planItemSeleccionado = null;
+    document.getElementById('f_ot').readOnly = false;
+    document.getElementById('f_origenTrabajo').disabled = false;
+    document.getElementById('f_equipo').disabled = false;
+  }
 
   renderSections(); renderRepuestosUsados(); renderRepuestosRec(); renderEntregaChecklist(); updateSummary();
   goToView('form');
@@ -4876,7 +4896,17 @@ function actualizarClaseOrdenAuto(){
   }
   aplicarEstadoOtVisibilidad();
 }
-document.getElementById('f_origenTrabajo').addEventListener('change', actualizarClaseOrdenAuto);
+document.getElementById('f_origenTrabajo').addEventListener('change', async () => {
+  actualizarClaseOrdenAuto();
+  const origen = document.getElementById('f_origenTrabajo').value;
+  if(origen === 'programado'){
+    poblarSelectorOtPlan(); // muestra ya con lo que haya en caché, sin esperar la red
+    actualizarPlanSemanal({ forzar:true }).then(poblarSelectorOtPlan).catch(()=>{});
+  } else {
+    document.getElementById('otPlanWrap').style.display = 'none';
+    if(planItemSeleccionado) limpiarVinculoPlan();
+  }
+});
 
 // Estado de la OT: Reprogramada colapsa todo el bloque técnico (checklist, correctivo,
 // repuestos, observaciones, entrega, firmas) — es un registro corto y trazable, no una
@@ -4940,6 +4970,12 @@ function startNewForm(servicio){
   document.getElementById('f_motivoReprogramacion').value = '';
   actualizarClaseOrdenAuto();
   aplicarEstadoOtVisibilidad();
+  planItemSeleccionado = null;
+  document.getElementById('f_ot').readOnly = false;
+  document.getElementById('f_origenTrabajo').disabled = false;
+  document.getElementById('f_equipo').disabled = false;
+  poblarSelectorOtPlan();
+  document.getElementById('f_otPlan').value = '';
 
   clearSignatureCanvas('sigTecnico');
   clearSignatureCanvas('sigSupervisor');
@@ -5278,6 +5314,7 @@ function buildRecord(){
     claseOrden: document.getElementById('f_claseOrden').value,
     estadoOt: document.getElementById('f_estadoOt').value,
     motivoReprogramacion: document.getElementById('f_motivoReprogramacion').value,
+    planSnapshot: planItemSeleccionado || null,
     completadoPor: document.getElementById('f_completadoPor').value,
     fecha: document.getElementById('f_fecha').value,
     area: document.getElementById('f_area').value,
@@ -5619,6 +5656,102 @@ function renderPlanSemanalBadge(){
   badge.textContent = `Plan semanal: ${planSemanalActivo.semana || '—'} · ${planSemanalActivo.items.length} OT`;
 }
 
+/* ---- Etapa D: selector de OT programada, autocompletado y planSnapshot ----
+   Gatillado por Origen=Programado (§3): el bloque solo aparece ahí, nunca
+   mezclado con el flujo No programado. */
+let planItemSeleccionado = null;
+
+function poblarSelectorOtPlan(){
+  const wrap = document.getElementById('otPlanWrap');
+  const origen = document.getElementById('f_origenTrabajo').value;
+  const items = (planSemanalActivo && planSemanalActivo.items) || [];
+  if(origen !== 'programado' || !items.length){ wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  const sel = document.getElementById('f_otPlan');
+  const valorPrevio = sel.value;
+  const estadoLabel = { pendiente:'Pendiente', ejecutada:'✓ Ejecutada', reprogramada:'Reprogramada' };
+  sel.innerHTML = '<option value="">— Escribir OT manualmente —</option>' +
+    items.map(it => {
+      // Ejecutada o con Conflicto de mapeo: visible para trazabilidad, pero NO
+      // seleccionable para iniciar una nueva ejecución normal (§6/§12).
+      const bloqueada = it.estado === 'ejecutada' || it.estadoMapeo === 'CONFLICTO';
+      const prefijo = it.estadoMapeo === 'CONFLICTO' ? '⛔ CONFLICTO — ' : '';
+      return `<option value="${esc(it.ot)}" ${bloqueada ? 'disabled' : ''}>${prefijo}${esc(it.ot)} — ${esc(it.descripcion || it.equipoNombre || '—')} · ${esc(estadoLabel[it.estado] || it.estado || '')}</option>`;
+    }).join('');
+  // conserva la selección si el ítem sigue existiendo (ej. tras un refresh en segundo plano)
+  if(items.some(it => it.ot === valorPrevio)) sel.value = valorPrevio;
+}
+
+function aplicarSeleccionPlan(item){
+  if(item.estado === 'ejecutada' || item.estadoMapeo === 'CONFLICTO'){
+    // defensivo — la opción ya viene disabled, esto solo cubre el caso borde
+    document.getElementById('f_otPlan').value = '';
+    toast(item.estadoMapeo === 'CONFLICTO' ? '⛔ Esta OT tiene un conflicto de mapeo — no se puede operar desde aquí.' : 'Esta OT ya fue registrada como Ejecutada.');
+    return;
+  }
+
+  // Snapshot completo desde el momento de la selección — incluye la identidad
+  // del plan (planId/semana/sourcePlan), no solo el ítem, para que la
+  // trazabilidad histórica sobreviva aunque el plan activo cambie después (§21).
+  planItemSeleccionado = Object.assign({}, item, {
+    planId: planSemanalActivo ? planSemanalActivo.planId : '',
+    semana: planSemanalActivo ? planSemanalActivo.semana : '',
+    sourcePlan: planSemanalActivo ? planSemanalActivo.sourcePlan : ''
+  });
+
+  const otInput = document.getElementById('f_ot');
+  otInput.value = item.ot;
+  otInput.readOnly = true;
+  document.getElementById('f_origenTrabajo').disabled = true; // Origen/OT/Clase quedan realmente protegidos (§30)
+
+  actualizarClaseOrdenAuto();
+  if(item.claseOrden === 'PM01' || item.claseOrden === 'PM02'){
+    document.getElementById('f_claseOrden').value = item.claseOrden;
+  }
+  document.getElementById('f_claseOrden').disabled = true;
+
+  // Validación servicio vs OT (§19 del documento original) — el plan es de
+  // Mantención (PM01/PM02); si el técnico está en Inspección/Correctivo, se
+  // avisa sin bloquear — la desviación puede ser válida, pero debe notarse.
+  if(currentServicio !== 'mtto'){
+    toast(`⚠ Esta OT está programada como Mantenimiento y estás en ${servicioLabelCorto(currentServicio)}. Revisa si corresponde cambiar el servicio.`);
+  }
+
+  // Equipo: solo se autoselecciona y bloquea con mapeo SEGURO (§10). Cualquier
+  // otro caso (SIN_RESOLVER, PROBABLE, etc.) exige selección manual, sin
+  // inventar — y limpia lo que hubiera quedado de una OT anterior (§16).
+  if(item.estadoMapeo === 'SEGURO' && item.equipoId && equipos.some(e => e.id === item.equipoId)){
+    document.getElementById('f_equipo').value = item.equipoId;
+    document.getElementById('f_equipo').dispatchEvent(new Event('change'));
+    document.getElementById('f_equipo').disabled = true;
+  } else {
+    document.getElementById('f_equipo').disabled = false;
+    document.getElementById('f_equipo').value = '';
+    document.getElementById('f_equipo').dispatchEvent(new Event('change'));
+    toast('Esta OT no tiene un equipo confiable en el plan — selecciónalo manualmente.');
+  }
+}
+
+// Limpia todo lo que vino del plan (OT/Clase/Equipo desbloqueados,
+// planSnapshot fuera) — usado tanto al elegir "escribir manual" en el
+// selector como al cambiar Origen fuera de Programado (§17/§20).
+function limpiarVinculoPlan(){
+  planItemSeleccionado = null;
+  const otInput = document.getElementById('f_ot');
+  otInput.readOnly = false;
+  otInput.value = '';
+  document.getElementById('f_origenTrabajo').disabled = false;
+  document.getElementById('f_equipo').disabled = false;
+  actualizarClaseOrdenAuto();
+}
+
+document.getElementById('f_otPlan').addEventListener('change', (e) => {
+  const ot = e.target.value;
+  if(!ot){ limpiarVinculoPlan(); return; }
+  const item = ((planSemanalActivo && planSemanalActivo.items) || []).find(it => it.ot === ot);
+  if(item) aplicarSeleccionPlan(item);
+});
+
 document.getElementById('btnActualizarPlan').addEventListener('click', async () => {
   const btn = document.getElementById('btnActualizarPlan');
   btn.disabled = true;
@@ -5685,7 +5818,12 @@ async function intentarSincronizar(rec){
   }
   await storage.set('registro:' + rec.id, rec);
   await setSyncStatusEnIndice(rec.id, status);
-  if(resultado.ok) subirPdfRemoto(rec); // solo tiene sentido si la fila ya existe en la planilla
+  if(resultado.ok){
+    subirPdfRemoto(rec); // solo tiene sentido si la fila ya existe en la planilla
+    if(rec.origenTrabajo === 'programado'){
+      actualizarPlanSemanal({ forzar:true }).then(poblarSelectorOtPlan).catch(()=>{});
+    }
+  }
   return resultado;
 }
 
@@ -6097,6 +6235,20 @@ async function loadRecordIntoForm(id){
   document.getElementById('f_motivoReprogramacion').value = rec.motivoReprogramacion || '';
   actualizarClaseOrdenAuto();
   aplicarEstadoOtVisibilidad();
+  poblarSelectorOtPlan();
+  if(rec.planSnapshot){
+    planItemSeleccionado = rec.planSnapshot;
+    document.getElementById('f_ot').readOnly = true;
+    document.getElementById('f_origenTrabajo').disabled = true;
+    document.getElementById('f_claseOrden').disabled = true;
+    document.getElementById('f_equipo').disabled = rec.planSnapshot.estadoMapeo === 'SEGURO';
+    document.getElementById('f_otPlan').value = rec.planSnapshot.ot || '';
+  } else {
+    planItemSeleccionado = null;
+    document.getElementById('f_ot').readOnly = false;
+    document.getElementById('f_origenTrabajo').disabled = false;
+    document.getElementById('f_equipo').disabled = false;
+  }
 
   renderSections(); renderRepuestosUsados(); renderRepuestosRec(); renderEntregaChecklist(); updateSummary();
   goToView('form');
@@ -7049,7 +7201,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v20'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v22'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
