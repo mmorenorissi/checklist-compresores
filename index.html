@@ -5785,7 +5785,10 @@ document.getElementById('f_otPlan').addEventListener('change', (e) => {
 
 document.getElementById('btnActualizarPlan').addEventListener('click', async () => {
   const btn = document.getElementById('btnActualizarPlan');
+  const textoOriginal = btn.textContent;
   btn.disabled = true;
+  btn.textContent = '⏳ Actualizando plan…';
+  toast('Actualizando plan…');
   try{
     const r = await actualizarPlanSemanal({ forzar:true });
     if(r.ok){
@@ -5801,6 +5804,7 @@ document.getElementById('btnActualizarPlan').addEventListener('click', async () 
     }
   } finally {
     btn.disabled = false;
+    btn.textContent = textoOriginal;
   }
 });
 function buildSyncPayload(rec){
@@ -7234,7 +7238,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v28'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v29'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
