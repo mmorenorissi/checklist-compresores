@@ -2814,8 +2814,7 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
 
     <div id="draftBanner" style="display:none;margin-bottom:12px;background:var(--regular-bg);border:1.5px solid var(--regular);border-radius:10px;padding:12px 14px;"></div>
 
-    <button class="btn-full" style="background:var(--steel);color:#fff;padding:16px;font-size:15.5px;margin-bottom:10px;" id="choiceMtto" data-servicio="mtto">🛠️ Iniciar Mantenimiento</button>
-    <button class="btn-full" style="background:var(--steel);color:#fff;padding:16px;font-size:15.5px;margin-bottom:10px;" id="choiceInspeccion" data-servicio="inspeccion">🔍 Iniciar Inspección</button>
+    <button class="btn-full" style="background:var(--steel);color:#fff;padding:16px;font-size:15.5px;margin-bottom:10px;" id="choiceProgramado">📅 Iniciar Trabajo Programado</button>
     <button class="btn-full" style="background:var(--steel);color:#fff;padding:16px;font-size:15.5px;margin-bottom:14px;" id="choiceCorrectivo" data-servicio="correctivo">🚨 Iniciar Mantenimiento Correctivo</button>
 
     <div class="card">
@@ -2975,6 +2974,7 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
     <div id="referenciaMttoCard" style="display:none;"></div>
     <div id="plannedMaintenanceCard" style="display:none;"></div>
 
+    <div id="pautaPendienteOtWrap" style="display:none;padding:16px;text-align:center;color:var(--muted);font-size:13.5px;">Selecciona una OT programada para cargar la pauta correspondiente.</div>
     <div id="sectionsWrap"></div>
 
     <div class="card" id="cardCorrectivo" style="display:none;">
@@ -4275,8 +4275,7 @@ async function goToView(name){
 /* ============================================================
    PORTADA
    ============================================================ */
-document.getElementById('choiceInspeccion').addEventListener('click', () => startNewForm('inspeccion'));
-document.getElementById('choiceMtto').addEventListener('click', () => startNewForm('mtto'));
+document.getElementById('choiceProgramado').addEventListener('click', () => startProgramado());
 document.getElementById('choiceCorrectivo').addEventListener('click', () => startNewForm('correctivo'));
 
 function populateAreaSelectPlain(id){
@@ -4828,7 +4827,7 @@ async function resumeDraft(draft){
     document.getElementById('f_origenTrabajo').disabled = true;
     document.getElementById('f_claseOrden').disabled = true;
     document.getElementById('f_area').disabled = draft.planSnapshot.estadoMapeo === 'SEGURO';
-    document.getElementById('f_equipo').disabled = draft.planSnapshot.estadoMapeo === 'SEGURO';
+    document.getElementById('f_equipo').disabled = draft.planSnapshot.estadoMapeo === 'SEGURO' || draft.planSnapshot.estadoMapeo === 'SIN_EQUIPO';
     document.getElementById('f_otPlan').value = draft.planSnapshot.ot || '';
     otPlanPrevValue = draft.planSnapshot.ot || '';
   } else {
@@ -4992,6 +4991,14 @@ function startNewForm(servicio){
 
 function renderSections(){
   const wrap = document.getElementById('sectionsWrap');
+  const placeholder = document.getElementById('pautaPendienteOtWrap');
+  const esProgramadoSinOt = document.getElementById('f_origenTrabajo').value === 'programado' && !planItemSeleccionado;
+  if(esProgramadoSinOt){
+    wrap.innerHTML = '';
+    placeholder.style.display = '';
+    return;
+  }
+  placeholder.style.display = 'none';
   wrap.innerHTML = '';
   itemsForServicio(currentServicio).forEach(sec => {
     const card = document.createElement('div');
@@ -5381,7 +5388,8 @@ async function saveRecord(){
     return false;
   }
   const equipoId = document.getElementById('f_equipo').value;
-  if(!equipoId){ toast('✕ Selecciona un equipo antes de guardar.'); return false; }
+  const esSinEquipo = planItemSeleccionado && planItemSeleccionado.estadoMapeo === 'SIN_EQUIPO';
+  if(!equipoId && !esSinEquipo){ toast('✕ Selecciona un equipo antes de guardar.'); return false; }
   if(!document.getElementById('f_completadoPor').value){ toast('✕ Falta indicar quién completa este registro (arriba de todo).'); return false; }
 
   const esReprogramada = document.getElementById('f_estadoOt').value === 'reprogramada';
@@ -5422,12 +5430,12 @@ async function saveRecord(){
       renderPlannedMaintenance(equipoActual);
       return false;
     }
-    if(!document.getElementById('f_horometro').value.trim()){
+    if(!esSinEquipo && !document.getElementById('f_horometro').value.trim()){
       toast('✕ Falta ingresar el horómetro del equipo.');
       return false;
     }
     const horaJustNecesaria = document.getElementById('horometroJustWrap').style.display !== 'none';
-    if(horaJustNecesaria && !document.getElementById('f_horometroJust').value.trim()){
+    if(!esSinEquipo && horaJustNecesaria && !document.getElementById('f_horometroJust').value.trim()){
       toast('✕ Falta justificar el horómetro menor al último registrado.');
       return false;
     }
@@ -5660,7 +5668,9 @@ function poblarSelectorOtPlan(){
       const bloqueada = it.estado === 'ejecutada' || it.estadoMapeo === 'CONFLICTO';
       const prefijo = it.estadoMapeo === 'CONFLICTO' ? '⛔ CONFLICTO — ' : '';
       const fechaFmt = formatFechaProgramaCorta(it.fechaPrograma);
-      return `<option value="${esc(it.ot)}" ${bloqueada ? 'disabled' : ''}>${prefijo}${esc(it.ot)} — ${esc(fechaFmt)} — ${esc(it.descripcion || it.equipoNombre || '—')} · ${esc(estadoLabel[it.estado] || it.estado || '')}</option>`;
+      const tipoLabel = it.tipoServicio === 'inspeccion' ? 'INSPECCIÓN' : it.tipoServicio === 'mtto' ? 'MANTENIMIENTO' : '—';
+      const estadoTexto = it.estadoMapeo === 'SIN_EQUIPO' ? 'SIN EQUIPO' : (estadoLabel[it.estado] || it.estado || '');
+      return `<option value="${esc(it.ot)}" ${bloqueada ? 'disabled' : ''}>${prefijo}${esc(it.ot)} — ${esc(fechaFmt)} — ${tipoLabel} — ${esc(it.descripcion || it.equipoNombre || '—')} · ${esc(estadoTexto)}</option>`;
     }).join('');
   // conserva la selección si el ítem sigue existiendo (ej. tras un refresh en segundo plano)
   if(items.some(it => it.ot === valorPrevio)) sel.value = valorPrevio;
@@ -5688,11 +5698,51 @@ function sincronizarUiOrigenOt(){
   poblarSelectorOtPlan();
 }
 
+// v32 — Trabajo Programado ya no fija servicio al entrar (§3/§4): reutiliza
+// startNewForm() completo como base ('mtto' es solo un placeholder interno,
+// nunca se guarda así si la OT resuelve otra cosa) y fuerza el flujo a
+// Programado. El servicio real recién se decide al elegir la OT, en
+// aplicarServicioDesdeOt(), según item.tipoServicio — la App nunca infiere
+// por descripción, clase de orden ni equipo.
+function startProgramado(){
+  startNewForm('mtto');
+  document.getElementById('f_origenTrabajo').value = 'programado';
+  document.getElementById('f_origenTrabajo').dispatchEvent(new Event('change'));
+  renderSections(); // recién ahora Origen=Programado ya quedó fijado — evalúa el placeholder correctamente
+}
+
+function aplicarServicioDesdeOt(tipoServicio){
+  if(tipoServicio !== 'mtto' && tipoServicio !== 'inspeccion'){
+    toast('⚠ Esta OT no trae un tipo de servicio válido — revisa el plan publicado en el Centro.');
+    return false;
+  }
+  if(currentServicio === tipoServicio) return true; // ya está correcto, no reconstruir innecesariamente
+  currentServicio = tipoServicio;
+  document.getElementById('formTitle').textContent = servicioLabelCorto(tipoServicio);
+  document.getElementById('f_intervaloWrap').style.display = tipoServicio === 'mtto' ? 'block' : 'none';
+  document.getElementById('f_tiposervicio').value = tipoServicio === 'inspeccion' ? 'INSPECCIÓN GENERAL' : 'MANTENIMIENTO';
+  itemState = blankItemState(tipoServicio);
+  photoState = blankPhotoState(tipoServicio);
+  renderSections();
+  updateSummary();
+  return true;
+}
+
 async function aplicarSeleccionPlan(item){
   if(item.estado === 'ejecutada' || item.estadoMapeo === 'CONFLICTO'){
     // defensivo — la opción ya viene disabled, esto solo cubre el caso borde
     document.getElementById('f_otPlan').value = '';
-    toast(item.estadoMapeo === 'CONFLICTO' ? '⛔ Esta OT tiene un conflicto de mapeo — no se puede operar desde aquí.' : 'Esta OT ya fue registrada como Ejecutada.');
+    toast(item.estadoMapeo === 'CONFLICTO' ? '⛔ OT con conflicto de mapeo. Debe corregirse en Centro Fin de Turno antes de ejecutar.' : 'Esta OT ya fue registrada como Ejecutada.');
+    return;
+  }
+
+  // Validación de tipoServicio ANTES de mutar OT/planSnapshot — el rechazo debe
+  // ser atómico: si el contrato viene inválido, la OT no queda ni a medias
+  // vinculada (§3 v32: "la App NO adivina tipoServicio"). El Backend ya lo
+  // valida, pero la defensa de la App debe ser cerrada igual.
+  if(!aplicarServicioDesdeOt(item.tipoServicio)){
+    document.getElementById('f_otPlan').value = '';
+    planItemSeleccionado = null;
     return;
   }
 
@@ -5716,17 +5766,25 @@ async function aplicarSeleccionPlan(item){
   }
   document.getElementById('f_claseOrden').disabled = true;
 
-  // Validación servicio vs OT (§19 del documento original) — el plan es de
-  // Mantención (PM01/PM02); si el técnico está en Inspección/Correctivo, se
-  // avisa sin bloquear — la desviación puede ser válida, pero debe notarse.
-  if(currentServicio !== 'mtto'){
-    toast(`⚠ Esta OT está programada como Mantenimiento y estás en ${servicioLabelCorto(currentServicio)}. Revisa si corresponde cambiar el servicio.`);
-  }
+  // Limpieza atómica de lo que dependía de la OT/equipo anterior — se hace acá,
+  // ANTES de resolver la rama de equipo nueva, porque SIN_EQUIPO y la rama
+  // manual no disparan el 'change' de Equipo que normalmente hace esta
+  // limpieza (a diferencia de SEGURO) — sin esto podían quedar residuos de
+  // actividades/repuestos planificados de la OT anterior.
+  plannedState = {};
+  plannedSnapshot = null;
+  repuestosUsados = repuestosUsados.filter(r => !r.activityId);
+  repuestosRec = repuestosRec.filter(r => !r.activityId);
+  renderPlannedMaintenance(null, null);
+  renderRepuestosUsados();
+  renderRepuestosRec();
 
-  // Equipo: solo se autoselecciona y bloquea con mapeo SEGURO (§10). f_equipo
-  // solo tiene opciones del área ya elegida en f_area — hay que cargar el Área
-  // real del equipo (desde el maestro, nunca desde texto/ubicacionSap) antes
-  // de poder seleccionarlo, igual que hace aplicarEquipoEscaneado() con el QR.
+  // Equipo: solo se autoselecciona y bloquea con mapeo SEGURO (§10 v31/§7 v32).
+  // SIN_EQUIPO es una actividad real del plan sin compresor individual asociado
+  // (ej. limpieza de sala) — no se exige ni se inventa un equipo (§8): no es
+  // "pendiente de elegir", es "no aplica". Cualquier otro caso (SIN_RESOLVER,
+  // etc.) exige selección manual, sin inventar — y limpia lo que hubiera
+  // quedado de una OT anterior (§16 v31/§6 v32).
   const equipoPlan = item.estadoMapeo === 'SEGURO' && item.equipoId ? equipos.find(e => e.id === item.equipoId) : null;
   if(equipoPlan){
     document.getElementById('f_area').value = equipoPlan.area;
@@ -5736,6 +5794,12 @@ async function aplicarSeleccionPlan(item){
     document.getElementById('f_equipo').value = equipoPlan.id;
     document.getElementById('f_equipo').dispatchEvent(new Event('change'));
     document.getElementById('f_equipo').disabled = true;
+  } else if(item.estadoMapeo === 'SIN_EQUIPO'){
+    document.getElementById('f_area').disabled = false;
+    document.getElementById('f_area').value = '';
+    populateFormEquipoSelect();
+    document.getElementById('f_equipo').disabled = true;
+    toast('Actividad sin equipo individual — no requiere seleccionar un compresor.');
   } else {
     document.getElementById('f_area').disabled = false;
     document.getElementById('f_area').value = '';
@@ -5743,6 +5807,12 @@ async function aplicarSeleccionPlan(item){
     populateFormEquipoSelect(); // repuebla ("Primero selecciona un área…") y limpia el equipo, sin dejar el de la OT anterior
     toast('Esta OT no tiene un equipo confiable en el plan — selecciónalo manualmente.');
   }
+
+  // Garantiza el checklist limpio para la OT nueva sin depender de que el
+  // cambio de equipo haya disparado 'change' (SIN_EQUIPO y la rama manual no
+  // seleccionan equipo, así que ese efecto colateral no ocurre) — evita
+  // arrastrar respuestas/fotos de la OT anterior (§6 v31/§6 v32).
+  rebuildMttoPautaIfNeeded();
 }
 
 // Limpia todo lo que vino del plan (OT/Clase/Equipo desbloqueados y sin
@@ -5759,6 +5829,7 @@ function limpiarVinculoPlan(){
   document.getElementById('f_equipo').disabled = false;
   populateFormEquipoSelect(); // repuebla ("Primero selecciona un área…") y limpia el equipo heredado
   actualizarClaseOrdenAuto();
+  renderSections(); // ya no es Programado sin OT — vuelve a mostrar la pauta real en vez del placeholder
 }
 
 document.getElementById('f_otPlan').addEventListener('change', async (e) => {
@@ -6305,7 +6376,7 @@ async function loadRecordIntoForm(id){
     document.getElementById('f_origenTrabajo').disabled = true;
     document.getElementById('f_claseOrden').disabled = true;
     document.getElementById('f_area').disabled = rec.planSnapshot.estadoMapeo === 'SEGURO';
-    document.getElementById('f_equipo').disabled = rec.planSnapshot.estadoMapeo === 'SEGURO';
+    document.getElementById('f_equipo').disabled = rec.planSnapshot.estadoMapeo === 'SEGURO' || rec.planSnapshot.estadoMapeo === 'SIN_EQUIPO';
     document.getElementById('f_otPlan').value = rec.planSnapshot.ot || '';
     otPlanPrevValue = rec.planSnapshot.ot || '';
   } else {
@@ -7252,7 +7323,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v31'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v32'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
