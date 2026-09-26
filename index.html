@@ -2917,7 +2917,7 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
       <div class="card-head"><h2>Datos generales</h2></div>
       <div class="card-pad">
         <div class="row2">
-          <div class="field"><label>N° de Informe</label><input type="text" id="f_ninforme"></div>
+          <div class="field"><label>N° de Informe</label><input type="text" id="f_ninforme" readonly></div>
           <div class="field"><label>Fecha</label><input type="date" id="f_fecha"></div>
         </div>
         <div class="field"><label>Tipo de Servicio</label><input type="text" id="f_tiposervicio"></div>
@@ -2947,15 +2947,15 @@ var jsQRLib=(()=>{var C0=(z,w)=>()=>{try{return w||z((w={exports:{}}).exports,w)
       <div class="card-head"><h2>Datos del equipo</h2></div>
       <div class="card-pad">
         <div class="row2">
-          <div class="field"><label>Marca</label><input type="text" id="f_marca"></div>
-          <div class="field"><label>Modelo</label><input type="text" id="f_modelo"></div>
+          <div class="field"><label>Marca</label><input type="text" id="f_marca" readonly></div>
+          <div class="field"><label>Modelo</label><input type="text" id="f_modelo" readonly></div>
         </div>
         <div class="row2">
-          <div class="field"><label>N° de Serie</label><input type="text" id="f_serie"></div>
-          <div class="field"><label>N° Interno / Placa</label><input type="text" id="f_interno"></div>
+          <div class="field"><label>N° de Serie</label><input type="text" id="f_serie" readonly></div>
+          <div class="field"><label>N° Interno / Placa</label><input type="text" id="f_interno" readonly></div>
         </div>
         <div class="row2">
-          <div class="field"><label>Ubicación en Faena</label><input type="text" id="f_ubicacion"></div>
+          <div class="field"><label>Ubicación en Faena</label><input type="text" id="f_ubicacion" readonly></div>
           <div class="field"><label>Horómetro Actual</label><input type="text" inputmode="decimal" id="f_horometro"></div>
         </div>
         <div id="horometroWarning" style="display:none;background:var(--malo-bg);color:var(--malo);border-radius:8px;padding:9px 11px;font-size:12.5px;font-weight:600;margin-top:-4px;margin-bottom:11px;"></div>
@@ -4301,7 +4301,6 @@ function populateFormIntervalo(equipo){
   const sel = document.getElementById('f_intervalo');
   sel.innerHTML = intervalosParaEquipo(equipo || null).map(i => `<option value="${esc(i)}">${esc(i)}</option>`).join('');
 }
-document.getElementById('f_ninforme').addEventListener('input', (e) => { delete e.target.dataset.autofolio; });
 
 /* ============================================================
    ESCÁNER QR — lee el código pegado en el equipo físico y aplica
@@ -5690,7 +5689,10 @@ function poblarSelectorOtPlan(){
       // seleccionable para iniciar una nueva ejecución normal (§6/§12).
       const bloqueada = it.estado === 'ejecutada' || it.estadoMapeo === 'CONFLICTO';
       const prefijo = it.estadoMapeo === 'CONFLICTO' ? '⛔ CONFLICTO — ' : '';
-      return `<option value="${esc(it.ot)}" ${bloqueada ? 'disabled' : ''}>${prefijo}${esc(it.ot)} — ${esc(it.descripcion || it.equipoNombre || '—')} · ${esc(estadoLabel[it.estado] || it.estado || '')}</option>`;
+      // Solo cambia la presentación (dd/mm/yyyy) — el valor real de item.fechaPrograma no se toca.
+      const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(it.fechaPrograma || '');
+      const fechaFmt = m ? `${m[3]}/${m[2]}/${m[1]}` : (it.fechaPrograma || '—');
+      return `<option value="${esc(it.ot)}" ${bloqueada ? 'disabled' : ''}>${prefijo}${esc(it.ot)} — ${esc(fechaFmt)} — ${esc(it.descripcion || it.equipoNombre || '—')} · ${esc(estadoLabel[it.estado] || it.estado || '')}</option>`;
     }).join('');
   // conserva la selección si el ítem sigue existiendo (ej. tras un refresh en segundo plano)
   if(items.some(it => it.ot === valorPrevio)) sel.value = valorPrevio;
@@ -7238,7 +7240,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v29'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v30'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
