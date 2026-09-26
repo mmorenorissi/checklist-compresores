@@ -5116,7 +5116,11 @@ function renderCorrectivoPhotos(){
 }
 
 function computeEquipoEstado(items){
-  const valores = Object.values(items);
+  // Seguridad y Bloqueo (LOTO, libro de bloqueo, segregación, registro/foto) es una
+  // desviación de ejecución/seguridad, no una condición técnica del equipo — se
+  // sigue contando en Bueno/Regular/Malo/N/A/Pend. (eso lo hace updateSummary con
+  // itemState completo), pero queda fuera de este cálculo.
+  const valores = Object.entries(items).filter(([key]) => !key.startsWith('seguridad-')).map(([, v]) => v);
   const malos = valores.filter(s => s.status === 'malo');
   const regulares = valores.filter(s => s.status === 'regular');
   if(malos.some(s => s.criticidad === 'critica' || s.criticidad === 'alta')) return { label:'NO OPERATIVO', cls:'malo' };
