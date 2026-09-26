@@ -4838,12 +4838,14 @@ async function resumeDraft(draft){
     document.getElementById('f_ot').readOnly = true;
     document.getElementById('f_origenTrabajo').disabled = true;
     document.getElementById('f_claseOrden').disabled = true;
+    document.getElementById('f_area').disabled = draft.planSnapshot.estadoMapeo === 'SEGURO';
     document.getElementById('f_equipo').disabled = draft.planSnapshot.estadoMapeo === 'SEGURO';
     document.getElementById('f_otPlan').value = draft.planSnapshot.ot || '';
   } else {
     planItemSeleccionado = null;
     document.getElementById('f_ot').readOnly = false;
     document.getElementById('f_origenTrabajo').disabled = false;
+    document.getElementById('f_area').disabled = false;
     document.getElementById('f_equipo').disabled = false;
   }
 
@@ -4984,6 +4986,7 @@ function startNewForm(servicio){
   planItemSeleccionado = null;
   document.getElementById('f_ot').readOnly = false;
   document.getElementById('f_origenTrabajo').disabled = false;
+  document.getElementById('f_area').disabled = false;
   document.getElementById('f_equipo').disabled = false;
   sincronizarUiOrigenOt();
   document.getElementById('f_otPlan').value = '';
@@ -5715,7 +5718,7 @@ function aplicarSeleccionPlan(item){
   planItemSeleccionado = Object.assign({}, item, {
     planId: planSemanalActivo ? planSemanalActivo.planId : '',
     semana: planSemanalActivo ? planSemanalActivo.semana : '',
-    sourcePlan: planSemanalActivo ? planSemanalActivo.sourcePlan : ''
+    sourcePlan: item.sourcePlan || (planSemanalActivo ? planSemanalActivo.sourcePlan : '') || ''
   });
 
   const otInput = document.getElementById('f_ot');
@@ -5736,17 +5739,23 @@ function aplicarSeleccionPlan(item){
     toast(`⚠ Esta OT está programada como Mantenimiento y estás en ${servicioLabelCorto(currentServicio)}. Revisa si corresponde cambiar el servicio.`);
   }
 
-  // Equipo: solo se autoselecciona y bloquea con mapeo SEGURO (§10). Cualquier
-  // otro caso (SIN_RESOLVER, PROBABLE, etc.) exige selección manual, sin
-  // inventar — y limpia lo que hubiera quedado de una OT anterior (§16).
-  if(item.estadoMapeo === 'SEGURO' && item.equipoId && equipos.some(e => e.id === item.equipoId)){
-    document.getElementById('f_equipo').value = item.equipoId;
+  // Equipo: solo se autoselecciona y bloquea con mapeo SEGURO (§10). f_equipo
+  // solo tiene opciones del área ya elegida en f_area — hay que cargar el Área
+  // real del equipo (desde el maestro, nunca desde texto/ubicacionSap) antes
+  // de poder seleccionarlo, igual que hace aplicarEquipoEscaneado() con el QR.
+  const equipoPlan = item.estadoMapeo === 'SEGURO' && item.equipoId ? equipos.find(e => e.id === item.equipoId) : null;
+  if(equipoPlan){
+    document.getElementById('f_area').value = equipoPlan.area;
+    document.getElementById('f_area').disabled = true;
+    populateFormEquipoSelect();
+    document.getElementById('f_equipo').value = equipoPlan.id;
     document.getElementById('f_equipo').dispatchEvent(new Event('change'));
     document.getElementById('f_equipo').disabled = true;
   } else {
+    document.getElementById('f_area').disabled = false;
+    document.getElementById('f_area').value = '';
     document.getElementById('f_equipo').disabled = false;
-    document.getElementById('f_equipo').value = '';
-    document.getElementById('f_equipo').dispatchEvent(new Event('change'));
+    populateFormEquipoSelect(); // repuebla ("Primero selecciona un área…") y limpia el equipo, sin dejar el de la OT anterior
     toast('Esta OT no tiene un equipo confiable en el plan — selecciónalo manualmente.');
   }
 }
@@ -5760,10 +5769,10 @@ function limpiarVinculoPlan(){
   otInput.readOnly = false;
   otInput.value = '';
   document.getElementById('f_origenTrabajo').disabled = false;
-  const equipoSel = document.getElementById('f_equipo');
-  equipoSel.disabled = false;
-  equipoSel.value = '';
-  equipoSel.dispatchEvent(new Event('change'));
+  document.getElementById('f_area').disabled = false;
+  document.getElementById('f_area').value = '';
+  document.getElementById('f_equipo').disabled = false;
+  populateFormEquipoSelect(); // repuebla ("Primero selecciona un área…") y limpia el equipo heredado
   actualizarClaseOrdenAuto();
 }
 
@@ -6263,12 +6272,14 @@ async function loadRecordIntoForm(id){
     document.getElementById('f_ot').readOnly = true;
     document.getElementById('f_origenTrabajo').disabled = true;
     document.getElementById('f_claseOrden').disabled = true;
+    document.getElementById('f_area').disabled = rec.planSnapshot.estadoMapeo === 'SEGURO';
     document.getElementById('f_equipo').disabled = rec.planSnapshot.estadoMapeo === 'SEGURO';
     document.getElementById('f_otPlan').value = rec.planSnapshot.ot || '';
   } else {
     planItemSeleccionado = null;
     document.getElementById('f_ot').readOnly = false;
     document.getElementById('f_origenTrabajo').disabled = false;
+    document.getElementById('f_area').disabled = false;
     document.getElementById('f_equipo').disabled = false;
   }
 
@@ -7223,7 +7234,7 @@ document.getElementById('fileImport').addEventListener('change', (e) => { if(e.t
 /* ============================================================
    INIT
    ============================================================ */
-const APP_VERSION = 'v26'; // subir junto con la versión del service-worker en cada entrega
+const APP_VERSION = 'v28'; // subir junto con la versión del service-worker en cada entrega
 
 async function init(){
   document.getElementById('appVersion').textContent = APP_VERSION;
